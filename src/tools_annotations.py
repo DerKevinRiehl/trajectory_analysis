@@ -53,3 +53,26 @@ def loadAnnotations(annotation_file: str):
             values.append(row[x])
         annotations[frame_no].append(values)
     return annotations
+
+def saveAnnotations(annotation_file, annotations):
+    """
+    This method saves all annotations to a given file.
+
+    Parameters
+    ----------
+    annotation_file : str
+        The path to the annotation file.
+    annotations: dict
+        The annotations to be stored.
+    """
+    fWriter = open(annotation_file, "w+")
+    for frame_nr in annotations:
+        frame_annotations = annotations[frame_nr]
+        for annotation in frame_annotations:
+            fWriter.write(str(frame_nr))
+            fWriter.write("\t")
+            for val in annotation:
+                fWriter.write(str(val))
+                fWriter.write("\t")
+            fWriter.write("\n")
+    fWriter.close()

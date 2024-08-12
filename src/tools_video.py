@@ -199,7 +199,38 @@ def renderAnnotatedFrame(frame, elements: dict, design: dict):
     plt.ion()
     return frame_out
 
-def renderAnnotatedVideo(video_file_path_source, video_file_path_destination, elements, design, max_num_frames=None, print_status=False):
+def renderAnnotatedVideo(video_file_path_source: str, 
+                         video_file_path_destination: str, 
+                         elements: dict, design:dict, 
+                         max_num_frames=None, print_status=False):
+    """
+    This method renders a video with elements drawn on it (e.g. the homography 
+    pattern, vehicle annotations, region_of_interest).
+
+    Parameters
+    ----------
+    video_file_path_source : str
+        The path to the source video file.
+    video_file_path_destination : str
+        The path to the destination video file.
+    elements: dict
+        A dictionary containing elements. Possible keys are: "homography", 
+        "vehicle_annotations", "labelled_vehicle_annnotations", and 
+        "region_of_interest".
+    design: dict
+        A dictionary containing instructions for drawing. This can include
+        colors, line sizes, and labelling styles.
+    max_num_frames: int
+        If set, the video is only rendered until a specific frame (not all frames).
+        Default: None, so the whole video is rendered per default.
+    print_status: bool
+        If set to True, console printing takes place to inform about the process of video generation.
+        Default: False, so no printing takes place.
+    Returns
+    -------
+    frame_out : uint8 Array [HEIGHTxWIDTHx3]
+        The number of frames in the video file.
+    """
     # Open Video Reader & Writer
     vidcap = cv2.VideoCapture(video_file_path_source)
     res_width, res_height, res_fps = getVideoResolution(video_file_path_source)

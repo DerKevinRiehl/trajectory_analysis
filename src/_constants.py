@@ -37,6 +37,27 @@ kalman_filtered_path          = "../data/4_kalman_filtered/"
 
 
 ######################################
+# INDICES
+
+# ANNOTATIONS
+INDEX_ANNOTATION = {
+    "ANN_TYPE": 0,
+    "POS_X": 1,
+    "POS_Y": 2,
+    "WIDTH": 3,
+    "HEIGHT": 4,
+    "ANGLE": 5,
+    "CONFIDENCE": 6,
+    "LABEL": 7,
+    "TRAJECTORY": 8,
+}
+
+
+
+
+
+
+######################################
 # SINGLE FRAME FILTERING
 
 # ROI = region of interest in first frame, with homography it will be transformed for 
