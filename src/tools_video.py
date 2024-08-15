@@ -189,6 +189,27 @@ def renderAnnotatedFrame(frame, elements: dict, design: dict):
                                        alpha=design["vehicle_annotations"]["draw_alpha"],
                                        transform=rect_transform)
             ax.add_patch(rect_patch)
+
+    # labelled annotation
+    if "labelled_vehicle_annnotations" in elements:
+        for annotation in elements["labelled_vehicle_annnotations"]:
+            angle_deg = annotation[5]*360/2/3.14159
+            WIDTH = annotation[3]
+            HEIGHT = annotation[4]
+            CENTER = (annotation[1] - WIDTH/2, annotation[2] - HEIGHT/2)
+            circle_patch = plt.Circle([annotation[1], annotation[2]], design["labelled_vehicle_annnotations"]["circle_radius"], fill=False, 
+                                        ec=design["labelled_vehicle_annnotations"]["line_color"], 
+                                        lw=design["labelled_vehicle_annnotations"]["line_width"], 
+                                        alpha=design["labelled_vehicle_annnotations"]["draw_alpha"],
+                                        linestyle=design["labelled_vehicle_annnotations"]["line_style"],)
+            ax.add_patch(circle_patch)
+            plt.scatter(annotation[1], annotation[2], color="white", s=20)
+            plt.text(annotation[1], annotation[2]-design["labelled_vehicle_annnotations"]["circle_radius"]-design["labelled_vehicle_annnotations"]["font_size"], 
+                      str(annotation[-1]), 
+                      horizontalalignment='center',
+                      color=design["labelled_vehicle_annnotations"]["font_color"],
+                      fontsize=design["labelled_vehicle_annnotations"]["font_size"])
+                       
     # convert matplot canvas back to array
     fig.canvas.draw()
     frame_out = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)

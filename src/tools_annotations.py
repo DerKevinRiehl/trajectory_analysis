@@ -14,6 +14,9 @@ Submitted to:   JOURNAL
 # #############################################################################
 import pandas as pd
 
+
+
+
 # #############################################################################
 # METHODS
 # #############################################################################
@@ -42,6 +45,8 @@ def loadAnnotations(annotation_file: str):
         df = pd.read_csv(annotation_file, compression="zip", sep="\t", header=None)
     else:
         df = pd.read_csv(annotation_file, sep="\t", header=None)
+    if df.iloc[:,df.shape[1]-1].dropna().shape[0]==0:
+        df = df.iloc[:,:-1]
     columns = df.shape[1]
     annotations = {}
     for idx, row in df.iterrows():
@@ -71,8 +76,10 @@ def saveAnnotations(annotation_file, annotations):
         for annotation in frame_annotations:
             fWriter.write(str(frame_nr))
             fWriter.write("\t")
-            for val in annotation:
+            for valIdx in range(0, len(annotation)):
+                val = annotation[valIdx]
                 fWriter.write(str(val))
-                fWriter.write("\t")
+                if not valIdx==len(annotation)-1:
+                    fWriter.write("\t")
             fWriter.write("\n")
     fWriter.close()

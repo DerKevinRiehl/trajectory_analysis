@@ -182,6 +182,13 @@ CLUSTER_MIN_DISTANCE = 3.0 # [m]
 
 
 
+######################################
+# TRAJECTORY BUILDING
+MAX_MATCHING_DISTANCE = 0.5 # [m]
+MAX_FRAME_GAP         = 5   # [frames]
+
+
+
 
 ######################################
 # VISUALIZATION
@@ -212,5 +219,14 @@ default_drawing_settings = {
         "draw_alpha": 0.5,
         "line_width": 1,
         "line_color": "red",
+    },
+    "labelled_vehicle_annnotations": {
+        "draw_alpha": 0.5,
+        "circle_radius": 100,
+        "line_width": 5,
+        "line_color": "white",
+        "line_style": "--",
+        "font_color": "white",
+        "font_size": 20,
     },
 }

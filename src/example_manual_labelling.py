@@ -29,7 +29,7 @@ from tools_trajectorization import generateEmptyTrajectoryLabelVehicleMap, loadT
 # #############################################################################
 # CONSTANTS
 # #############################################################################
-#RELEVANT_FRAME = 2000
+RELEVANT_FRAME = 2000
 RELEVANT_VIDEO = "DJI_0933.MOV"
 # RELEVANT_VIDEO = "DJI_0934.MOV"
 # RELEVANT_VIDEO = "DJI_0939.MOV"
@@ -56,51 +56,40 @@ region_of_interest = REGION_OF_INTEREST[RELEVANT_VIDEO]
 
 
 
-"""
-# #############################################################################
-# STEP 1: SINGLE FRAME PROCESSING
-# #############################################################################
-processed_annotations = {}
-processed_annotations_pix = {}
-for frame_counter in range(0, num_frames):
-    frame_annotations = annotations[frame_counter]
-    frame_homography = getFrameHomography(df_homography, frame_counter)
-    frame_region_of_interest = getTransformedRegionOfInterest(region_of_interest, df_homography, frame_counter)
-    processed_frame_annotations = processFrameAnnotations(frame_annotations, frame_region_of_interest, frame_homography)
-    processed_annotations[frame_counter] = processed_frame_annotations
-    processed_annotations_pix[frame_counter] = transformAnnotations_CARTESIAN_2_PIX(processed_frame_annotations, frame_homography)
-saveAnnotations("../data/2_frame_processed/"+RELEVANT_VIDEO+".txt", processed_annotations)
-saveAnnotations("../data/2_frame_processed/"+RELEVANT_VIDEO+"_PIX.txt", processed_annotations_pix)
-
-elements = {
-    "homography": df_homography,
-    "region_of_interest": region_of_interest,
-    "vehicle_annotations": processed_annotations_pix,
-}
-drawing_settings = default_drawing_settings.copy()
-drawing_settings["vehicle_annotations"]["draw_alpha"] = 1.0
-drawing_settings["vehicle_annotations"]["line_width"] = 1.5
-renderAnnotatedVideo(video_file_path_source=video_file_path, 
-                     video_file_path_destination="../videos/2_frame_processed/"+"Test_"+RELEVANT_VIDEO, 
-                     elements=elements, 
-                     design=drawing_settings, 
-                     max_num_frames=None, 
-                     print_status=True)
-"""
-
 
 # #############################################################################
 # STEP 2: TRAJECTORY GENERATION
 # #############################################################################
 
 processed_annotations = loadAnnotations("../data/2_frame_processed/"+RELEVANT_VIDEO+".txt")
-trajectorized_annotations = generateTrajectories(processed_annotations, print_status=True)
-saveAnnotations("../data/3_A_trajectorized_unlabelled/"+RELEVANT_VIDEO+".txt", trajectorized_annotations)
-
+trajectorized_annotations = loadAnnotations("../data/3_A_trajectorized_unlabelled/"+RELEVANT_VIDEO+".txt")
 unique_trajectory_labels = determineUniqueTrajectoryLabels(trajectorized_annotations)
+trajectory_vehicle_map = loadTrajectoryLabelVehicleMap("../data/3_B_trajectorized_mapping/"+RELEVANT_VIDEO+".txt")
 
-map_file = "../data/3_B_trajectorized_mapping/"+RELEVANT_VIDEO+".txt"
-generateEmptyTrajectoryLabelVehicleMap(map_file, unique_trajectory_labels)
-# HERE YOU NEED TO MANUALLY EDIT THE MAP_FILE BEFORE LOADING
-trajectory_vehicle_map = loadTrajectoryLabelVehicleMap(map_file)
-# TODO: WRITE A FUNCTION THAT CREATES ANOTHER COLUMN IN ANNOTATIONS WHICH USES MAP TO HAVE VEHICLE LABELS
+
+
+# #############################################################################
+# EXEMPLARY VISUALIZATION OF TRAJECTORY LABELS
+# #############################################################################
+from tools_video import extractFrameFromVideo, renderAnnotatedFrame
+# VIDEO
+succsss, frame = extractFrameFromVideo(video_file_path, RELEVANT_FRAME)
+# ANNOTATIONS
+frame_annotations = processed_annotations[RELEVANT_FRAME]
+# HOMOGRAPHY
+frame_homography = getFrameHomography(df_homography, RELEVANT_FRAME)
+# REGION OF INTEREST
+frame_region_of_interest = getTransformedRegionOfInterest(region_of_interest, df_homography, RELEVANT_FRAME)
+
+drawing_settings = default_drawing_settings.copy()
+elements = {
+    "homography": frame_homography,
+    "region_of_interest": frame_region_of_interest,
+    "vehicle_annotations": frame_annotations, 
+    "labelled_vehicle_annnotations": transformAnnotations_CARTESIAN_2_PIX(trajectorized_annotations[RELEVANT_FRAME], frame_homography),
+}
+frame_finished = renderAnnotatedFrame(frame, elements, design=drawing_settings)
+    
+import matplotlib.pyplot as plt
+plt.figure()
+plt.imshow(frame_finished)

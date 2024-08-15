@@ -1,0 +1,21 @@
+{
+	"Trajectory_18": "UNDEFINED",
+	"Trajectory_7": "UNDEFINED",
+	"Trajectory_9": "UNDEFINED",
+	"Trajectory_5": "UNDEFINED",
+	"Trajectory_4": "UNDEFINED",
+	"Trajectory_6": "Vehicle_1",
+	"Trajectory_10": "UNDEFINED",
+	"Trajectory_16": "UNDEFINED",
+	"Trajectory_17": "UNDEFINED",
+	"Trajectory_11": "UNDEFINED",
+	"Trajectory_2": "UNDEFINED",
+	"Trajectory_15": "UNDEFINED",
+	"Trajectory_13": "UNDEFINED",
+	"Trajectory_1": "UNDEFINED",
+	"Trajectory_8": "UNDEFINED",
+	"Trajectory_14": "UNDEFINED",
+	"Trajectory_0": "UNDEFINED",
+	"Trajectory_3": "UNDEFINED",
+	"Trajectory_12": "UNDEFINED"
+}

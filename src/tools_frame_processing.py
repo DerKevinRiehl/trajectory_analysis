@@ -17,10 +17,6 @@ import numpy as np
 from shapely.geometry.polygon import Point
 from tools_homography import transformAnnotations_PIX_2_CARTESIAN
 import _constants as cs
-# from _constants import MIN_VEHICLE_WIDTH, MAX_VEHICLE_WIDTH
-# from _constants import MIN_VEHICLE_HEIGHT, MAX_VEHICLE_HEIGHT
-# from _constants import CLUSTER_MIN_DIST
-# from _constants import INDEX_ANNOTATION
 
 
 
