@@ -17,7 +17,7 @@ import matplotlib.transforms as tr
 # import matplotlib
 import numpy as np
 from tools_homography import getFrameHomography, getTransformedRegionOfInterest
-
+import gc
 
 
 
@@ -193,7 +193,8 @@ def renderAnnotatedFrame(frame, elements: dict, design: dict):
     fig.canvas.draw()
     frame_out = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
     frame_out = frame_out.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-    plt.close()
+    plt.close(fig)
+    gc.collect()
     # reset matplotlib
     # matplotlib.use(last_backend)
     plt.ion()
@@ -226,10 +227,6 @@ def renderAnnotatedVideo(video_file_path_source: str,
     print_status: bool
         If set to True, console printing takes place to inform about the process of video generation.
         Default: False, so no printing takes place.
-    Returns
-    -------
-    frame_out : uint8 Array [HEIGHTxWIDTHx3]
-        The number of frames in the video file.
     """
     # Open Video Reader & Writer
     vidcap = cv2.VideoCapture(video_file_path_source)
@@ -258,6 +255,8 @@ def renderAnnotatedVideo(video_file_path_source: str,
         edited_frame = cv2.cvtColor(edited_frame, cv2.COLOR_RGB2BGR)
         # Save Image to File
         video_writer.write(edited_frame)
+        del image
+        del edited_frame
         # Print Status
         if print_status:
             print("Video Processing...\t", frame_counter, "\t", "/", num_frames)

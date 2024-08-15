@@ -67,8 +67,8 @@ drawing_settings = default_drawing_settings.copy()
 # #############################################################################
 from tools_video import renderAnnotatedVideo
 renderAnnotatedVideo(video_file_path_source=video_file_path, 
-                     video_file_path_destination="Test.mov", 
+                     video_file_path_destination="Test2.mov", 
                      elements=elements, 
                      design=drawing_settings, 
-                     max_num_frames=100,#None, 
+                     max_num_frames=1000,#100,#None, 
                      print_status=True)
