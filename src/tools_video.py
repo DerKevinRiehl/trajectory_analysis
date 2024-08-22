@@ -268,6 +268,8 @@ def renderAnnotatedVideo(video_file_path_source: str,
         frame_elements = {}
         if "vehicle_annotations" in elements:
             frame_elements["vehicle_annotations"] = elements["vehicle_annotations"][frame_counter]
+        if "labelled_vehicle_annnotations" in elements:
+            frame_elements["labelled_vehicle_annnotations"] = elements["labelled_vehicle_annnotations"][frame_counter]
         if "homography" in elements:
             frame_elements["homography"] = getFrameHomography(elements["homography"], frame_counter)
         if "region_of_interest" in elements:
