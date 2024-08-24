@@ -12,6 +12,9 @@ Submitted to:   JOURNAL
 # IMPORTS
 # #############################################################################
 from shapely.geometry.polygon import Polygon
+import numpy as np
+
+
 
 
 # #############################################################################
@@ -29,7 +32,7 @@ inference_annotations_path    = "../data/1_annotations/"
 homography_path               = "../data/1_homography/"
 frame_processed_path          = "../data/2_frame_processed/"
 trajectorized_unlabelled_path = "../data/3_A_trajectorized_unlabelled/"
-trajectorized_labelled_path   = "../data/3_B_trajectorized_labelled/"
+trajectorized_labelled_path   = "../data/3_B_trajectorized_vehiclized/"
 kalman_filtered_path          = "../data/4_kalman_filtered/"
 
 
@@ -187,6 +190,19 @@ CLUSTER_MIN_DISTANCE = 3.0 # [m]
 MAX_MATCHING_DISTANCE = 0.5 # [m]
 MAX_FRAME_GAP         = 5   # [frames]
 
+
+
+######################################
+# KALMAN FILTERING
+VEHICLE_DIMENSION_MOVING_AVERAGE_WINDOW_LENGTH = 10
+VEHICLE_DYNAMICS_MOVING_AVERAGE_WINDOW_LENGTH = 10
+KALMAN_INITIAL_ESTIMATION_WINDOW_LENGTH = 30
+KALMAN_TRANSIENT_PERIOD = 60
+ANGLE_VELOCITY_THRESHOLD = 10/360*2*np.pi
+SPEED_ESTIMATION_TIME_HORIZON = 15
+SKIP_KALMAN_FILTERING_MAX_GAP = 25
+ANGLE_ESTIMATION_DEVIATION_TOLLERANCE = 5/360*2*np.pi
+MAX_ALLOWED_OBB_DEVIATON_M = 0.5
 
 
 

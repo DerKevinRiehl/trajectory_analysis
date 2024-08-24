@@ -13,7 +13,7 @@ Submitted to:   JOURNAL
 # IMPORTS
 # #############################################################################
 import pandas as pd
-
+import numpy as np
 
 
 
@@ -83,3 +83,50 @@ def saveAnnotations(annotation_file, annotations):
                     fWriter.write("\t")
             fWriter.write("\n")
     fWriter.close()
+
+
+
+def loadUniqueVehicles(annotation_file: str):
+    """
+    This method loads the labels of all unique vehicles mentioned in the given file.
+    
+    Parameters
+    ----------
+    annotation_file : str
+        The path to the annotation file.
+        
+    Returns
+    -------
+    unique_vehicles: list[str]
+        A list with all unique, mentioned vehicle labels.
+    """
+    raw_annotations = pd.read_csv(annotation_file, header=None, sep="\t", names=["frame_nr", "obj_type", "x", "y", "w", "h", "angle_rad", "confid", "trajectory", "vehicle"])
+    unique_vehicles = list(set(raw_annotations["vehicle"].tolist()))
+    if np.nan in unique_vehicles:
+        unique_vehicles.remove(np.nan)
+    return unique_vehicles
+
+def loadAnnotationsForFiltering(annotation_file: str, selected_vehicle, selected_time_frames):
+    """
+    This method loads the annotations as a dtaframe, suitable for the Kalman filtering procedure.
+    
+    Parameters
+    ----------
+    annotation_file : str
+        The path to the annotation file.
+    selected_vehicle: str
+        The specific, selcted vehicle the annotations shall be loaded for.
+    selected_time_frames: list[int]
+        List of two integers, specifying first and last frame that the filtering should analyse.
+        
+    Returns
+    ----------
+    veh_annotations: pd.DataFrame
+        
+    """
+    raw_annotations = pd.read_csv(annotation_file, header=None, sep="\t", names=["frame_nr", "obj_type", "x", "y", "w", "h", "angle_rad", "confid", "trajectory", "vehicle"])
+    veh_annotations = raw_annotations[raw_annotations["vehicle"] == selected_vehicle]
+    veh_annotations = veh_annotations[["frame_nr", "x", "y", "w", "h", "angle_rad"]]
+    veh_annotations = veh_annotations[veh_annotations["frame_nr"]>=selected_time_frames[0]]
+    veh_annotations = veh_annotations[veh_annotations["frame_nr"]<=selected_time_frames[1]]
+    return veh_annotations

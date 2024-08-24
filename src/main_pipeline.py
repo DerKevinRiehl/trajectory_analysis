@@ -13,7 +13,7 @@ Submitted to:   JOURNAL
 # IMPORTS
 # #############################################################################
 from tools_video import getNumberOfFramesFromVideo
-from tools_annotations import loadAnnotations, saveAnnotations
+from tools_annotations import loadAnnotations, saveAnnotations, loadAnnotationsForFiltering, loadUniqueVehicles
 from _constants import video_path
 from _constants import inference_annotations_path
 from _constants import REGION_OF_INTEREST
@@ -24,6 +24,10 @@ from tools_frame_processing import processFrameAnnotations
 from tools_video import renderAnnotatedVideo
 from tools_trajectorization import generateTrajectories, determineUniqueTrajectoryLabels
 from tools_trajectorization import generateEmptyTrajectoryLabelVehicleMap, loadTrajectoryLabelVehicleMap
+from tools_filtering import calculateKalmanFilteredTrajectory, alignTrajectories, featureCalculation
+import numpy as np
+
+
 
 
 # #############################################################################
@@ -89,6 +93,9 @@ renderAnnotatedVideo(video_file_path_source=video_file_path,
 """
 
 
+
+
+"""
 # #############################################################################
 # STEP 2: TRAJECTORY GENERATION
 # #############################################################################
@@ -104,3 +111,75 @@ generateEmptyTrajectoryLabelVehicleMap(map_file, unique_trajectory_labels)
 # HERE YOU NEED TO MANUALLY EDIT THE MAP_FILE BEFORE LOADING
 trajectory_vehicle_map = loadTrajectoryLabelVehicleMap(map_file)
 # TODO: WRITE A FUNCTION THAT CREATES ANOTHER COLUMN IN ANNOTATIONS WHICH USES MAP TO HAVE VEHICLE LABELS
+# see manual_labelling_app.py
+"""
+
+
+
+
+# #############################################################################
+# STEP 3: EXTENDED KALMAN FILTERING
+# #############################################################################
+
+# Determine Kalman Filter Parameters
+Q_k_hbb = np.diag([1.0, 1.0, 1.0, 1.0, 1.0]) # P_0.copy() # covariance matrix of error of state
+R_k_hbb = np.diag([1.0, 1.0, 1.0, 1.0, 1.0]) # P_0.copy() # covariance matrix of error of output
+Q_k_obb = np.diag([1.0, 1.0, 1.0, 1.0, 1.0]) # P_0.copy() # covariance matrix of error of state
+R_k_obb = np.diag([1.0, 1.0, 1.0, 1.0, 1.0]) # P_0.copy() # covariance matrix of error of output
+
+# Determine Video parameters
+obb_mode = True
+selected_time_frames = [0, 7517+1]
+video_frames_per_second = 25
+
+# Determine File parameters
+annotation_file = "../data/3_C_vehiclized/"+RELEVANT_VIDEO+".txt"
+target_output_file = "../data/4_kalman_filtered/"+RELEVANT_VIDEO+"_"
+
+unique_vehicles = loadUniqueVehicles(annotation_file)
+
+for selected_vehicle in unique_vehicles:
+    if selected_vehicle == "UNDEFINED":
+        continue
+    print(annotation_file, selected_vehicle, "...")    
+        # Load Raw Data
+    veh_trajectory_raw = loadAnnotationsForFiltering(annotation_file, selected_vehicle, selected_time_frames)
+    veh_trajectory_raw = featureCalculation(veh_trajectory_raw, video_frames_per_second, obb=obb_mode)
+    veh_trajectory_raw = veh_trajectory_raw.reset_index()
+    del veh_trajectory_raw["index"]
+    first_frame = veh_trajectory_raw["frame_nr"].iloc[0]
+    last_frame = veh_trajectory_raw["frame_nr"].iloc[-1]  
+
+        # Calculate Kalman Filtered Trajectory
+    kalman_filtered_trajectory_rts_hbb = calculateKalmanFilteredTrajectory(veh_trajectory_raw, Q_k_hbb, R_k_hbb, first_frame, last_frame, video_frames_per_second, obb=False)
+    if obb_mode:
+        kalman_filtered_trajectory_rts_obb = calculateKalmanFilteredTrajectory(veh_trajectory_raw, Q_k_obb, R_k_obb, first_frame, last_frame, video_frames_per_second, obb=True)
+        kalman_filtered_trajectory_rts_obb = alignTrajectories(kalman_filtered_trajectory_rts_obb, kalman_filtered_trajectory_rts_hbb)
+        
+        # Save Calculated Trajectories
+    kalman_filtered_trajectory_rts_hbb.to_csv(target_output_file+selected_vehicle+"_hbb.csv",index=False)
+    if obb_mode:
+        kalman_filtered_trajectory_rts_obb.to_csv(target_output_file+selected_vehicle+"_obb.csv",index=False)
+
+
+# Code to display raw and Kalman filtered trajectories to compare
+# E.G: VEHICLE_4
+import pandas as pd
+selected_time_frames = [0, 7517+1]
+selected_vehicle = "VEHICLE_4"
+annotation_file = "../data/3_C_vehiclized/"+RELEVANT_VIDEO+".txt"
+df_raw = loadAnnotationsForFiltering(annotation_file, selected_vehicle, selected_time_frames)
+df_filtered_hbb = pd.read_csv("../data/4_kalman_filtered/"+RELEVANT_VIDEO+"_"+selected_vehicle+"_hbb"+".csv")
+df_filtered_obb = pd.read_csv("../data/4_kalman_filtered/"+RELEVANT_VIDEO+"_"+selected_vehicle+"_obb"+".csv")
+
+import matplotlib.pyplot as plt
+plt.subplot(1,2,1)
+plt.plot(df_raw["frame_nr"], df_raw["x"], label="raw")
+plt.plot(df_filtered_hbb["frame_nr"], df_filtered_hbb["x"], label="HBB filtered")
+plt.plot(df_filtered_obb["frame_nr"], df_filtered_obb["x"], label="OBB filtered")
+plt.legend()
+plt.subplot(1,2,2)
+plt.plot(df_raw["frame_nr"], df_raw["y"], label="raw")
+plt.plot(df_filtered_hbb["frame_nr"], df_filtered_hbb["y"], label="HBB filtered")
+plt.plot(df_filtered_obb["frame_nr"], df_filtered_obb["y"], label="OBB filtered")
+plt.legend()
