@@ -22,7 +22,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from PyQt5.Qt import QPushButton, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit, QWidget, QApplication
+from PyQt5.Qt import QPushButton, QVBoxLayout, QHBoxLayout, QComboBox, QLabel, QGridLayout, QWidget, QApplication
+from alive_progress import alive_bar
 
 from tools_video import getNumberOfFramesFromVideo
 from tools_annotations import loadAnnotations, saveAnnotations
@@ -34,13 +35,15 @@ from tools_homography import loadHomography, getFrameHomography, getTransformedR
 from tools_homography import transformAnnotations_CARTESIAN_2_PIX
 from tools_frame_processing import processFrameAnnotations
 from tools_video import renderAnnotatedVideo
+from tools_video import extractFrameFromVideo, renderAnnotatedFrame
 from tools_trajectorization import generateTrajectories, determineUniqueTrajectoryLabels
 from tools_trajectorization import generateEmptyTrajectoryLabelVehicleMap, loadTrajectoryLabelVehicleMap
 
 
 # #############################################################################
 # CONSTANTS
-RELEVANT_VIDEO = "DJI_0934.MOV"
+RELEVANT_VIDEO = "DJI_0943.MOV"
+INITIAL_MAPPING_DONE = False
 
 
 # #############################################################################
@@ -170,40 +173,153 @@ class MapTrajectoryWidget(QWidget):
             plt.close()
 
 
+class InitialMapTrajectoryWidget(QWidget):
+    def __init__(self, traj_list, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.options_list = [f"VEHICLE_{i+1}" for i in range(15)]
+        self.options_list = ["Select Label ..."] + ["REMOVE"] + self.options_list
+
+        num_rows = int(len(traj_list)//2) + int(len(traj_list)%2)
+        self.num_trajectories = len(traj_list)
+        self.map_dict = {}
+        self.traj_list = []
+        for i in range(num_rows):
+            if 2*i+1 < len(traj_list):
+                self.traj_list.append([traj_list[2*i], traj_list[2*i+1]])
+            else:
+                self.traj_list.append([traj_list[2*i]])
+
+        self.grid_layout = QGridLayout()
+        for r in range(num_rows):
+            label = QLabel()
+            label.setText(f"Select Label for {self.traj_list[r][0]}: ")
+            self.grid_layout.addWidget(label, r, 0)
+            comboBox = QComboBox()
+            comboBox.addItems(self.options_list)
+            comboBox.currentTextChanged.connect(lambda text, row=r, col=0: self.get_mapping(row, col, text))
+            self.grid_layout.addWidget(comboBox, r, 1)
+            if len(self.traj_list[r]) == 2:
+                label = QLabel()
+                label.setText(f"Select Label for {self.traj_list[r][1]}: ")
+                self.grid_layout.addWidget(label, r, 2)
+                comboBox = QComboBox()
+                comboBox.addItems(self.options_list)
+                comboBox.currentTextChanged.connect(lambda text, row=r, col=1: self.get_mapping(row, col, text))
+                self.grid_layout.addWidget(comboBox, r, 3)
+
+        self.confirm_button = QPushButton("Confirm")
+        self.confirm_button.clicked.connect(self.confirm_clicled)
+        self.visualize_button = QPushButton("Visualize")
+        self.visualize_button.clicked.connect(self.visualize_clicked)
+        self.reset_visual_button = QPushButton("Reset Visualization")
+        self.reset_visual_button.clicked.connect(self.reset_visual_clicked)
+        self.vbox = QVBoxLayout(self)
+        self.vbox.addLayout(self.grid_layout)
+        self.vbox.addStretch()
+        self.vbox.addWidget(self.visualize_button)
+        self.vbox.addStretch()
+        self.vbox.addWidget(self.reset_visual_button)
+        self.vbox.addStretch()
+        self.vbox.addWidget(self.confirm_button)    
+        self.show()
+        plt.show(block=True)
+    
+    def get_mapping(self, row, col, text):
+        if text != self.options_list[0]:
+            self.map_dict[self.traj_list[row][col]] = text
+    
+    def confirm_clicled(self):
+        if self.num_trajectories == len(self.map_dict):
+            self.close()
+            plt.close()
+    
+    def visualize_clicked(self):
+        if self.num_trajectories == len(self.map_dict):
+            plt.close()
+            vehiclized_df_0 = df_0.copy()
+            vehiclized_df_0["vehicle"] = vehiclized_df_0["trajectory"]
+            vehiclized_df_0["vehicle"] = vehiclized_df_0["vehicle"].map(self.map_dict)
+            vehiclized_df_0 = vehiclized_df_0[vehiclized_df_0["vehicle"] != "REMOVE"]
+            vehiclized_annotations_0 = vehiclized_df_0.values.tolist()
+            elements["labelled_vehicle_annnotations"] = transformAnnotations_CARTESIAN_2_PIX(vehiclized_annotations_0, frame_homography)
+            frame_finished = renderAnnotatedFrame(frame, elements, design=drawing_settings)
+            plt.figure()
+            plt.imshow(frame_finished)
+            plt.show(block=True)
+    
+    def reset_visual_clicked(self):
+        plt.close()
+        elements["labelled_vehicle_annnotations"] = transformAnnotations_CARTESIAN_2_PIX(trajectorized_annotations_0, frame_homography)
+        frame_finished = renderAnnotatedFrame(frame, elements, design=drawing_settings)
+        plt.figure()
+        plt.imshow(frame_finished)
+        plt.show(block=True)
+
+
+
 # #############################################################################
 # LABELLING
 # #############################################################################
-max_num_frames, max_time = df['frame_num'].max(), df['time'].max()
-while True:
-    df, trajectory_vehicle_map, vehicle_ending, max_coherent_time = find_and_remove_redundant_trajectories(df, trajectory_vehicle_map, map_file)
-    if max_coherent_time >= max_time:
-        print("Finished labelling for the video ", RELEVANT_VIDEO)
-        break
-    
-    start_zoom_time = max(max_coherent_time - 2.5, 0)
-    end_zoom_time = min(max_coherent_time + 8.0, max_time)
-    sns.color_palette("dark")
-    zoom_df = df[(df.time >= start_zoom_time) & (df.time <= end_zoom_time) & (df['vehicle'].isin([vehicle_ending, 'UNDEFINED']))]
-    fig, axs = plt.subplots(2, 1)
-    dots = sns.scatterplot(data=zoom_df, x="time", y="x", hue="legend_label", style="legend_label", ax=axs[0])
-    cursor1 = mplcursors.cursor(dots, hover=True)
-    cursor1.connect('add', show_annation)
-    sns.lineplot(data=zoom_df, x="time", y="x", hue="legend_label", style="legend_label", ax=axs[0])
+if not INITIAL_MAPPING_DONE:
+    success, frame = extractFrameFromVideo(video_file_path, 0)
+    frame_homography = getFrameHomography(df_homography, 0)
+    frame_region_of_interest = getTransformedRegionOfInterest(region_of_interest, df_homography, 0)
+    df_0 = df[df["frame_num"] == 0].copy()
+    df_0 = df_0.drop(columns=['frame_num', 'time', 'legend_label', 'vehicle'])
+    trajectorized_annotations_0 = df_0.values.tolist()
 
-    dots = sns.scatterplot(data=zoom_df, x="time", y="y", hue="legend_label", style="legend_label", ax=axs[1])
-    cursor2 = mplcursors.cursor(dots, hover=True)
-    cursor2.connect('add', show_annation)
-    sns.lineplot(data=zoom_df, x="time", y="y", hue="legend_label", style="legend_label", ax=axs[1])
-
-    demo = MapTrajectoryWidget(zoom_df.loc[zoom_df['vehicle'] != vehicle_ending, 'trajectory'].unique().tolist())
-    selected_trajectory = demo.current_text
-    del demo, fig, axs, dots, cursor1, cursor2, zoom_df
-
-    trajectory_vehicle_map[selected_trajectory] = vehicle_ending
+    drawing_settings = default_drawing_settings.copy()
+    elements = {
+        "homography": frame_homography,
+        "region_of_interest": frame_region_of_interest,
+        "labelled_vehicle_annnotations": transformAnnotations_CARTESIAN_2_PIX(trajectorized_annotations_0, frame_homography),
+    }
+    frame_finished = renderAnnotatedFrame(frame, elements, design=drawing_settings)
+    plt.figure()
+    plt.imshow(frame_finished)
+    demo = InitialMapTrajectoryWidget(df_0["trajectory"].unique().tolist())
+    for traj in demo.map_dict.keys():
+        trajectory_vehicle_map[traj] = demo.map_dict[traj]
+    del demo, frame, frame_homography, frame_region_of_interest, df_0, trajectorized_annotations_0, drawing_settings, elements, frame_finished
     df = map_trajectories_to_vehicles(df, trajectory_vehicle_map)
     with open(map_file, 'w') as file:
         file.write(json.dumps(trajectory_vehicle_map, indent=4))
-    print(f'Mapped {selected_trajectory} to {vehicle_ending} and saved!')
+    print(f'Saved inital mapping!')
+
+with alive_bar(manual=True) as bar:
+    max_num_frames, max_time = df['frame_num'].max(), df['time'].max()
+    while True:
+        df, trajectory_vehicle_map, vehicle_ending, max_coherent_time = find_and_remove_redundant_trajectories(df, trajectory_vehicle_map, map_file)
+        bar(max_coherent_time/max_time)
+        if max_coherent_time >= max_time:
+            print("Finished labelling for the video ", RELEVANT_VIDEO)
+            break
+        
+        start_zoom_time = max(max_coherent_time - 2.5, 0)
+        end_zoom_time = min(max_coherent_time + 8.0, max_time)
+        sns.color_palette("dark")
+        zoom_df = df[(df.time >= start_zoom_time) & (df.time <= end_zoom_time) & (df['vehicle'].isin([vehicle_ending, 'UNDEFINED']))]
+        fig, axs = plt.subplots(2, 1)
+        dots = sns.scatterplot(data=zoom_df, x="time", y="x", hue="legend_label", style="legend_label", ax=axs[0])
+        cursor1 = mplcursors.cursor(dots, hover=True)
+        cursor1.connect('add', show_annation)
+        sns.lineplot(data=zoom_df, x="time", y="x", hue="legend_label", style="legend_label", ax=axs[0])
+
+        dots = sns.scatterplot(data=zoom_df, x="time", y="y", hue="legend_label", style="legend_label", ax=axs[1])
+        cursor2 = mplcursors.cursor(dots, hover=True)
+        cursor2.connect('add', show_annation)
+        sns.lineplot(data=zoom_df, x="time", y="y", hue="legend_label", style="legend_label", ax=axs[1])
+
+        demo = MapTrajectoryWidget(zoom_df.loc[zoom_df['vehicle'] != vehicle_ending, 'trajectory'].unique().tolist())
+        selected_trajectory = demo.current_text
+        del demo, fig, axs, dots, cursor1, cursor2, zoom_df
+
+        trajectory_vehicle_map[selected_trajectory] = vehicle_ending
+        df = map_trajectories_to_vehicles(df, trajectory_vehicle_map)
+        with open(map_file, 'w') as file:
+            file.write(json.dumps(trajectory_vehicle_map, indent=4))
+        print(f'Mapped {selected_trajectory} to {vehicle_ending} and saved!')
 
 
 vehiclized_annotations, vehiclized_annotations_pix = convert_annotations_dataframe_to_dict(df, df_homography)
