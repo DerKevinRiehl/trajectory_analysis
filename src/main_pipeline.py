@@ -162,24 +162,33 @@ for selected_vehicle in unique_vehicles:
         kalman_filtered_trajectory_rts_obb.to_csv(target_output_file+selected_vehicle+"_obb.csv",index=False)
 
 
-# Code to display raw and Kalman filtered trajectories to compare
-# E.G: VEHICLE_4
-import pandas as pd
-selected_time_frames = [0, 7517+1]
-selected_vehicle = "VEHICLE_4"
-annotation_file = "../data/3_C_vehiclized/"+RELEVANT_VIDEO+".txt"
-df_raw = loadAnnotationsForFiltering(annotation_file, selected_vehicle, selected_time_frames)
-df_filtered_hbb = pd.read_csv("../data/4_kalman_filtered/"+RELEVANT_VIDEO+"_"+selected_vehicle+"_hbb"+".csv")
-df_filtered_obb = pd.read_csv("../data/4_kalman_filtered/"+RELEVANT_VIDEO+"_"+selected_vehicle+"_obb"+".csv")
+# # Code to display raw and Kalman filtered trajectories to compare
+# # E.G: VEHICLE_4
+# import pandas as pd
+# selected_time_frames = [0, 7517+1]
+# selected_vehicle = "VEHICLE_4"
+# annotation_file = "../data/3_C_vehiclized/"+RELEVANT_VIDEO+".txt"
+# df_raw = loadAnnotationsForFiltering(annotation_file, selected_vehicle, selected_time_frames)
+# df_filtered_hbb = pd.read_csv("../data/4_kalman_filtered/"+RELEVANT_VIDEO+"_"+selected_vehicle+"_hbb"+".csv")
+# df_filtered_obb = pd.read_csv("../data/4_kalman_filtered/"+RELEVANT_VIDEO+"_"+selected_vehicle+"_obb"+".csv")
 
-import matplotlib.pyplot as plt
-plt.subplot(1,2,1)
-plt.plot(df_raw["frame_nr"], df_raw["x"], label="raw")
-plt.plot(df_filtered_hbb["frame_nr"], df_filtered_hbb["x"], label="HBB filtered")
-plt.plot(df_filtered_obb["frame_nr"], df_filtered_obb["x"], label="OBB filtered")
-plt.legend()
-plt.subplot(1,2,2)
-plt.plot(df_raw["frame_nr"], df_raw["y"], label="raw")
-plt.plot(df_filtered_hbb["frame_nr"], df_filtered_hbb["y"], label="HBB filtered")
-plt.plot(df_filtered_obb["frame_nr"], df_filtered_obb["y"], label="OBB filtered")
-plt.legend()
+# import matplotlib.pyplot as plt
+# plt.subplot(1,2,1)
+# plt.plot(df_raw["frame_nr"], df_raw["x"], label="raw")
+# plt.plot(df_filtered_hbb["frame_nr"], df_filtered_hbb["x"], label="HBB filtered")
+# plt.plot(df_filtered_obb["frame_nr"], df_filtered_obb["x"], label="OBB filtered")
+# plt.legend()
+# plt.subplot(1,2,2)
+# plt.plot(df_raw["frame_nr"], df_raw["y"], label="raw")
+# plt.plot(df_filtered_hbb["frame_nr"], df_filtered_hbb["y"], label="HBB filtered")
+# plt.plot(df_filtered_obb["frame_nr"], df_filtered_obb["y"], label="OBB filtered")
+# plt.legend()
+
+# import os
+# vid = "DJI_0944"
+# folder = "../data/4_kalman_filtered/"+vid+"/"
+# files = os.listdir(folder)
+# for file in files:
+#     if file.startswith(vid):
+#         print(file.replace(vid+".MOV_",""))
+#         os.rename(folder+file, folder+file.replace(vid+".MOV_",""))
