@@ -207,6 +207,13 @@ MAX_ALLOWED_OBB_DEVIATON_M = 0.5
 
 
 ######################################
+# TRAJECTORY PROCESSING
+PROCESSING_INTEGRATION_CORRECTION_THRESHOLD = 0.00001
+PROCESSING_INTEGRATION_CORRECTION_REPETITIONS = 50
+
+
+
+######################################
 # VISUALIZATION
 
 default_drawing_settings = {

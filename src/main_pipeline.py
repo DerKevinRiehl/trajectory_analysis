@@ -25,8 +25,8 @@ from tools_video import renderAnnotatedVideo
 from tools_trajectorization import generateTrajectories, determineUniqueTrajectoryLabels
 from tools_trajectorization import generateEmptyTrajectoryLabelVehicleMap, loadTrajectoryLabelVehicleMap
 from tools_filtering import calculateKalmanFilteredTrajectory, alignTrajectories, featureCalculation
+from tools_trajectory_processing import processTrajectory
 import numpy as np
-
 
 
 
@@ -35,11 +35,11 @@ import numpy as np
 # #############################################################################
 #RELEVANT_FRAME = 2000
 RELEVANT_VIDEO = "DJI_0933.MOV"
-# RELEVANT_VIDEO = "DJI_0934.MOV"
-# RELEVANT_VIDEO = "DJI_0939.MOV"
-# RELEVANT_VIDEO = "DJI_0940.MOV"
-# RELEVANT_VIDEO = "DJI_0943.MOV"
-# RELEVANT_VIDEO = "DJI_0944.MOV"
+RELEVANT_VIDEO = "DJI_0934.MOV"
+RELEVANT_VIDEO = "DJI_0939.MOV"
+RELEVANT_VIDEO = "DJI_0940.MOV"
+RELEVANT_VIDEO = "DJI_0943.MOV"
+RELEVANT_VIDEO = "DJI_0944.MOV"
 
 
 
@@ -116,7 +116,7 @@ trajectory_vehicle_map = loadTrajectoryLabelVehicleMap(map_file)
 
 
 
-
+"""
 # #############################################################################
 # STEP 3: EXTENDED KALMAN FILTERING
 # #############################################################################
@@ -134,7 +134,7 @@ video_frames_per_second = 25
 
 # Determine File parameters
 annotation_file = "../data/3_C_vehiclized/"+RELEVANT_VIDEO+".txt"
-target_output_file = "../data/4_kalman_filtered/"+RELEVANT_VIDEO+"_"
+target_output_file = "../data/4_kalman_filtered/"+RELEVANT_VIDEO.replace(".MOV", "")+"/"
 
 unique_vehicles = loadUniqueVehicles(annotation_file)
 
@@ -160,6 +160,32 @@ for selected_vehicle in unique_vehicles:
     kalman_filtered_trajectory_rts_hbb.to_csv(target_output_file+selected_vehicle+"_hbb.csv",index=False)
     if obb_mode:
         kalman_filtered_trajectory_rts_obb.to_csv(target_output_file+selected_vehicle+"_obb.csv",index=False)
+"""
+
+
+
+
+# #############################################################################
+# STEP 4: TRAJECTORY PROCESSING
+# #############################################################################
+
+video_trajectory_path = "../data/4_kalman_filtered/"+RELEVANT_VIDEO.replace(".MOV", "")+"/"
+vehiclized_file_path = "../data/3_C_vehiclized/"+RELEVANT_VIDEO+".txt"
+vehicle_proceeding_order_file_path = "../data/5_vehicle_relationships/proceeding_order/"+RELEVANT_VIDEO+".txt"
+trajectory_type = "obb"
+first_vehicle = "VEHICLE_1"
+target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+
+final_trajectory_df = processTrajectory(video_trajectory_path, vehiclized_file_path, 
+                  vehicle_proceeding_order_file_path, trajectory_type, first_vehicle)
+final_trajectory_df.to_csv(target_output_file, index=False)
+
+
+
+
+
+
+
 
 
 # # Code to display raw and Kalman filtered trajectories to compare
@@ -183,12 +209,3 @@ for selected_vehicle in unique_vehicles:
 # plt.plot(df_filtered_hbb["frame_nr"], df_filtered_hbb["y"], label="HBB filtered")
 # plt.plot(df_filtered_obb["frame_nr"], df_filtered_obb["y"], label="OBB filtered")
 # plt.legend()
-
-# import os
-# vid = "DJI_0944"
-# folder = "../data/4_kalman_filtered/"+vid+"/"
-# files = os.listdir(folder)
-# for file in files:
-#     if file.startswith(vid):
-#         print(file.replace(vid+".MOV_",""))
-#         os.rename(folder+file, folder+file.replace(vid+".MOV_",""))
