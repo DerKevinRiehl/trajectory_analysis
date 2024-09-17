@@ -32,7 +32,7 @@ inference_annotations_path    = "../data/1_annotations/"
 homography_path               = "../data/1_homography/"
 frame_processed_path          = "../data/2_frame_processed/"
 trajectorized_unlabelled_path = "../data/3_A_trajectorized_unlabelled/"
-trajectorized_labelled_path   = "../data/3_B_trajectorized_vehiclized/"
+trajectorized_labelled_path   = "../data/3_C_vehiclized/"
 kalman_filtered_path          = "../data/4_kalman_filtered/"
 
 

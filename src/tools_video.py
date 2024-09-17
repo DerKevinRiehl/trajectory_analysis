@@ -14,10 +14,12 @@ Submitted to:   JOURNAL
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib.transforms as tr
-# import matplotlib
 import numpy as np
-from tools_homography import getFrameHomography, getTransformedRegionOfInterest
+from tools_homography import getFrameHomography, getTransformedRegionOfInterest, transformPointFrom_CARTESIAN_2_PIX
 import gc
+import matplotlib.transforms as mtransforms
+import matplotlib.patches as patches
+import time
 
 
 
@@ -112,7 +114,7 @@ def renderAnnotatedFrame(frame, elements: dict, design: dict):
     Parameters
     ----------
     frame : uint8 Array [HEIGHTxWIDTHx3]
-        The path to the video file.
+        The frame as uint8 Array in RGB format.
     elements: dict
         A dictionary containing elements. Possible keys are: "homography", 
         "vehicle_annotations", "labelled_vehicle_annnotations", and 
@@ -124,7 +126,7 @@ def renderAnnotatedFrame(frame, elements: dict, design: dict):
     Returns
     -------
     frame_out : uint8 Array [HEIGHTxWIDTHx3]
-        The number of frames in the video file.
+        The annotated frame as uint8 Array in RGB format.
     """
     # generate figure
     # last_backend = matplotlib.get_backend()
@@ -203,8 +205,8 @@ def renderAnnotatedFrame(frame, elements: dict, design: dict):
                                         alpha=design["labelled_vehicle_annnotations"]["draw_alpha"],
                                         linestyle=design["labelled_vehicle_annnotations"]["line_style"],)
             ax.add_patch(circle_patch)
-            plt.scatter(annotation[1], annotation[2], color="white", s=20)
-            plt.text(annotation[1], annotation[2]-design["labelled_vehicle_annnotations"]["circle_radius"]-design["labelled_vehicle_annnotations"]["font_size"], 
+            ax.scatter(annotation[1], annotation[2], color="white", s=20)
+            ax.text(annotation[1], annotation[2]-design["labelled_vehicle_annnotations"]["circle_radius"]-design["labelled_vehicle_annnotations"]["font_size"], 
                       str(annotation[-1]), 
                       horizontalalignment='center',
                       color=design["labelled_vehicle_annnotations"]["font_color"],
@@ -217,14 +219,80 @@ def renderAnnotatedFrame(frame, elements: dict, design: dict):
     plt.close(fig)
     gc.collect()
     # reset matplotlib
-    # matplotlib.use(last_backend)
     plt.ion()
     return frame_out
+
+def renderTransformedFrame(frame, transformation):
+    """
+    This method renders a frame with elements drawn on it (e.g. the homography 
+    pattern, vehicle annotations, region_of_interest)
+
+    Parameters
+    ----------
+    frame : uint8 Array [HEIGHTxWIDTHx3]
+        The frame as uint8 Array in RGB format.
+    transformation: mtransforms.Affine2D
+        A transformation function.
+        
+    Returns
+    -------
+    frame_out : uint8 Array [HEIGHTxWIDTHx3]
+        The transformed frame as uint8 Array in RGB format.
+    """
+    # generate figure
+    # last_backend = matplotlib.get_backend()
+    # matplotlib.use('Agg') # make a user that does not exist so window doesnt popup
+    plt.ioff()
+    fig = plt.figure(frameon=False)
+    fig.set_size_inches(frame.shape[1]/100,frame.shape[0]/100)
+    # dedicated ax so picture is same size as canvas
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    ax.set_xlim(0, frame.shape[1])
+    ax.set_ylim(frame.shape[0], 0)
+    fig.add_axes(ax)
+    # render frame
+    image_context = ax.imshow(frame, aspect='auto')
+    image_context.set_transform(transformation)
+    # convert matplot canvas back to array
+    fig.canvas.draw()
+    frame_out = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    frame_out = frame_out.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    plt.close(fig)
+    gc.collect()
+    # reset matplotlib
+    # matplotlib.use(last_backend)
+    plt.ion()
+    frame_out = np.flip(frame_out, axis=0)
+    return frame_out
+
+def getVehicleEgoPerspectiveTransformation(frame: np.array, kalman_frame_coordinates: list, kalman_frame_angle: float, zoom_factor=5):
+    """
+    This method calculate a transformation function to display a frame with a vehicle in its center, zoomed in, and rotated by the vehicle angle.
+
+    Parameters
+    ----------
+    frame : uint8 Array [HEIGHTxWIDTHx3]
+        The frame as uint8 Array in RGB format.
+    kalman_frame_coordinates: list[float]
+        The annotation coordinates (row) from a Kalman filtered trajectory file.
+    kalman_frame_angle: float
+        The angle of the vehicle in radians from a Kalman filtered trajectory file.
+        
+    Returns
+    -------
+    transformation : mtransforms.Affine2D
+        The transformation function.
+    """
+    transformation = mtransforms.Affine2D().translate(-kalman_frame_coordinates[0], -kalman_frame_coordinates[1]).scale(
+        zoom_factor, zoom_factor).rotate(kalman_frame_angle-np.pi/2).translate(frame.shape[1]/2, frame.shape[0]/2)
+    return transformation
 
 def renderAnnotatedVideo(video_file_path_source: str, 
                          video_file_path_destination: str, 
                          elements: dict, design:dict, 
-                         max_num_frames=None, print_status=False):
+                         start_frame=None,
+                         end_frame=None, print_status=False):
     """
     This method renders a video with elements drawn on it (e.g. the homography 
     pattern, vehicle annotations, region_of_interest).
@@ -242,7 +310,10 @@ def renderAnnotatedVideo(video_file_path_source: str,
     design: dict
         A dictionary containing instructions for drawing. This can include
         colors, line sizes, and labelling styles.
-    max_num_frames: int
+    start_frame: int
+        If set, the video is rendered beginning from this frame.
+        Default: None, so the video starts from beginning.
+    end_frame: int
         If set, the video is only rendered until a specific frame (not all frames).
         Default: None, so the whole video is rendered per default.
     print_status: bool
@@ -256,9 +327,12 @@ def renderAnnotatedVideo(video_file_path_source: str,
     video_writer = cv2.VideoWriter(video_file_path_destination, vidformat_fourcc, res_fps, (res_width, res_height), True)
     # Start Processing Each Frame
     num_frames = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if max_num_frames is not None:
-        num_frames = max_num_frames
-    for frame_counter in range(0, num_frames):
+    if end_frame is not None:
+        num_frames = end_frame
+    start_frame_used = 0
+    if start_frame is not None:
+        start_frame_used = start_frame
+    for frame_counter in range(start_frame_used, num_frames):
         # Load Next Frame
         success, image = vidcap.read()
         if not success:
@@ -275,6 +349,31 @@ def renderAnnotatedVideo(video_file_path_source: str,
         if "region_of_interest" in elements:
             frame_elements["region_of_interest"] = getTransformedRegionOfInterest(elements["region_of_interest"], elements["homography"], frame_counter)      
         edited_frame = renderAnnotatedFrame(image, frame_elements, design)
+        if "transformation" in elements:
+            df_kalman_vehicle_data = elements["transformation"]["kalman"]
+            df_vehicle_frame = df_kalman_vehicle_data[df_kalman_vehicle_data["frame_nr"]==frame_counter]
+            kalman_annotations = df_vehicle_frame.iloc[0].tolist()
+            kalman_coordinate = kalman_annotations[4:5+1]
+            kalman_frame_coordinates = transformPointFrom_CARTESIAN_2_PIX(kalman_coordinate, frame_elements["homography"])
+            kalman_frame_angle = kalman_annotations[8]
+            transformation = getVehicleEgoPerspectiveTransformation(edited_frame, kalman_frame_coordinates, kalman_frame_angle, elements["transformation"]["zoom"][frame_counter])
+            edited_frame = renderTransformedFrame(edited_frame, transformation)
+        if "hud" in elements:
+            df_space_headway = elements["hud"]["headway"]
+            space_headway = df_space_headway[df_space_headway["Frame_ID"]==frame_counter]["Space_Hdwy"].iloc[0]
+            df_trajectory_data = elements["hud"]["history"]
+            df_history = df_trajectory_data[df_trajectory_data["Frame_ID"]<=frame_counter]
+            df_history = df_history[df_history["Frame_ID"]>=frame_counter-elements["hud"]["horizon"]]
+            positions_transformed_x = []
+            positions_transformed_y = []
+            for idx, row in df_history.iterrows():
+                pos = [row["Cartesian_X"], row["Cartesian_Y"]]
+                posT = transformPointFrom_CARTESIAN_2_PIX(pos, frame_elements["homography"])
+                positions_transformed_x.append(posT[0])
+                positions_transformed_y.append(posT[1])
+            df_history["x_pixel"] = positions_transformed_x
+            df_history["y_pixel"] = positions_transformed_y
+            edited_frame = renderHUDAnnotatedFrame(edited_frame, kalman_annotations, df_history, space_headway, elements["hud"]["horizon"])
         edited_frame = cv2.cvtColor(edited_frame, cv2.COLOR_RGB2BGR)
         # Save Image to File
         video_writer.write(edited_frame)
@@ -285,3 +384,122 @@ def renderAnnotatedVideo(video_file_path_source: str,
             print("Video Processing...\t", frame_counter, "\t", "/", num_frames)
     # Close Video Writer
     video_writer.release()
+
+
+def renderHUDAnnotatedFrame(frame, kalman_annotations, df_history, space_headway, history_horizon):
+    """
+    This method renders a frame with elements drawn on it (e.g. the homography 
+    pattern, vehicle annotations, region_of_interest)
+
+    Parameters
+    ----------
+    frame : uint8 Array [HEIGHTxWIDTHx3]
+        The frame as uint8 Array in RGB format.
+    elements: dict
+        A dictionary containing elements. Possible keys are: "homography", 
+        "vehicle_annotations", "labelled_vehicle_annnotations", and 
+        "region_of_interest".
+    design: dict
+        A dictionary containing instructions for drawing. This can include
+        colors, line sizes, and labelling styles.
+        
+    Returns
+    -------
+    frame_out : uint8 Array [HEIGHTxWIDTHx3]
+        The annotated frame as uint8 Array in RGB format.
+    """
+    # generate figure
+    # last_backend = matplotlib.get_backend()
+    # matplotlib.use('Agg') # make a user that does not exist so window doesnt popup
+    plt.ioff()
+    fig = plt.figure(frameon=False)
+    fig.set_size_inches(frame.shape[1]/100,frame.shape[0]/100)
+    # dedicated ax so picture is same size as canvas
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    ax.set_xlim(0, frame.shape[1])
+    ax.set_ylim(frame.shape[0], 0)
+    fig.add_axes(ax)
+    # render frame
+    ax.imshow(frame, aspect='auto')
+
+    # render statistics text
+    rect = patches.Rectangle((100-40, 50), 1600, 550, linewidth=1, edgecolor='none', facecolor='gray', alpha=0.5)
+    ax.add_patch(rect)
+
+    sep=20
+    fsize=50
+    lblx = 100
+    valx = 900
+    ystrt = 250
+    xoffst = 500
+    unitxofst=20
+    ax.text(lblx, ystrt-(fsize+sep)*2, "Time",             color="white", fontsize=fsize)
+    ax.text(lblx, ystrt+(fsize+sep)*0, "Position (x, y)",  color="white", fontsize=fsize)
+    ax.text(lblx, ystrt+(fsize+sep)*1, "Angle",            color="white", fontsize=fsize)
+    ax.text(lblx, ystrt+(fsize+sep)*2, "Velocity",         color="white", fontsize=fsize)
+    ax.text(lblx, ystrt+(fsize+sep)*3, "Ang. Velocity",    color="white", fontsize=fsize)
+    ax.text(lblx, ystrt+(fsize+sep)*4, "Space Headway:",       color="white", fontsize=fsize)
+
+    time_frames = kalman_annotations[0]
+    time_seconds = time_frames/25
+    time_formatted = time.strftime('%M:%S', time.gmtime(time_seconds))
+    ax.text(valx, ystrt-(fsize+sep)*2, time_formatted, color="white", fontsize=fsize, horizontalalignment='right')
+    ax.text(valx+xoffst+100, ystrt-(fsize+sep)*2, str(int(time_frames))+" Frames", color="white", fontsize=fsize, horizontalalignment='right')
+
+    ax.text(valx, ystrt+(fsize+sep)*0, "{:.2f}".format(kalman_annotations[6+0]), color="white", fontsize=fsize, horizontalalignment='right')
+    ax.text(valx+xoffst, ystrt+(fsize+sep)*0, "{:.2f}".format(kalman_annotations[6+1]), color="white", fontsize=fsize, horizontalalignment='right')
+    ax.text(valx+unitxofst, ystrt+(fsize+sep)*0, "m", color="white", fontsize=fsize, horizontalalignment='left')
+    ax.text(valx+xoffst+unitxofst, ystrt+(fsize+sep)*0, "m", color="white", fontsize=fsize, horizontalalignment='left')
+    
+    ax.text(valx, ystrt+(fsize+sep)*1, "{:.2f}".format(kalman_annotations[6+2]), color="white", fontsize=fsize, horizontalalignment='right')
+    ax.text(valx+xoffst, ystrt+(fsize+sep)*1, "{:.2f}".format(360*kalman_annotations[6+2]/(2*np.pi)), color="white", fontsize=fsize, horizontalalignment='right')
+    ax.text(valx+unitxofst, ystrt+(fsize+sep)*1, "'", color="white", fontsize=fsize, horizontalalignment='left')
+    ax.text(valx+xoffst+unitxofst, ystrt+(fsize+sep)*1, "°", color="white", fontsize=fsize, horizontalalignment='left')
+    
+    ax.text(valx, ystrt+(fsize+sep)*2, "{:.2f}".format(abs(kalman_annotations[6+3]*25*10)), color="white", fontsize=fsize, horizontalalignment='right')
+    ax.text(valx+xoffst, ystrt+(fsize+sep)*2, "{:.2f}".format(abs(kalman_annotations[6+3]*3.6*25*10)), color="white", fontsize=fsize, horizontalalignment='right')
+    ax.text(valx+unitxofst, ystrt+(fsize+sep)*2, "m/s", color="white", fontsize=fsize, horizontalalignment='left')
+    ax.text(valx+xoffst+unitxofst, ystrt+(fsize+sep)*2, "km/h", color="white", fontsize=fsize, horizontalalignment='left')
+    
+    ax.text(valx, ystrt+(fsize+sep)*3, "{:.2f}".format(kalman_annotations[6+4]), color="white", fontsize=fsize, horizontalalignment='right')
+    ax.text(valx+xoffst, ystrt+(fsize+sep)*3, "{:.2f}".format(360*kalman_annotations[6+4]/(2*np.pi)), color="white", fontsize=fsize, horizontalalignment='right')
+    ax.text(valx+unitxofst, ystrt+(fsize+sep)*3, "'/s", color="white", fontsize=fsize, horizontalalignment='left')
+    ax.text(valx+xoffst+unitxofst, ystrt+(fsize+sep)*3, "°/s", color="white", fontsize=fsize, horizontalalignment='left')
+
+    ax.text(valx, ystrt+(fsize+sep)*4, "{:.2f}".format(space_headway), color="white", fontsize=fsize, horizontalalignment='right')
+    ax.text(valx+unitxofst, ystrt+(fsize+sep)*4, "m", color="white", fontsize=fsize, horizontalalignment='left')
+
+    # draw history trajectory   
+    xstrt = 100
+    ystrt = 1100
+    hstH = 500
+    historyLbl = "Space_Hdwy"
+    historyMax = np.nanmax(df_history[historyLbl])
+    historyMin = np.nanmin(df_history[historyLbl])
+    df_history["val"] = df_history[historyLbl]-historyMin
+    df_history["val"] = df_history["val"]/(historyMax-historyMin)
+    
+    rect = patches.Rectangle((100-40, ystrt-250), 1000, 800, linewidth=1, edgecolor='none', facecolor='gray', alpha=0.5)
+    ax.add_patch(rect)
+    ax.text(lblx, ystrt-100-(fsize+sep)*1, "Historical Space Headway", color="white", fontsize=fsize)
+    xscatter = xstrt+np.arange(history_horizon+1)*8
+    yscatter = (ystrt+(1-df_history["val"])*hstH).tolist()
+    if len(xscatter)==len(yscatter):
+        ax.scatter(xscatter, yscatter, color="white", s=100)
+        ax.scatter(xscatter[-1], yscatter[-1], color="cyan", s=400)
+        ax.text(xscatter[-1], yscatter[-1]-fsize/2, "{:.2f}".format(space_headway), color="white", fontsize=fsize, horizontalalignment='center')
+        ax.plot([xscatter[0], xscatter[-1]], [ystrt, ystrt], "--", color="white")
+        ax.plot([xscatter[0], xscatter[-1]], [ystrt+hstH, ystrt+hstH], "--", color="white")
+        ax.text(np.nanmean(xscatter), ystrt+fsize*1.5, "{:.2f}".format(historyMax), color="white", fontsize=fsize, horizontalalignment='center')
+        ax.text(np.nanmean(xscatter), ystrt+hstH-fsize/2, "{:.2f}".format(historyMin), color="white", fontsize=fsize, horizontalalignment='center')
+
+    # convert matplot canvas back to array
+    fig.canvas.draw()
+    frame_out = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    frame_out = frame_out.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    plt.close(fig)
+    gc.collect()
+    # reset matplotlib
+    plt.ion()
+    return frame_out
