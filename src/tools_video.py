@@ -23,6 +23,8 @@ import time
 
 
 
+HISTORY_LENGTH = 25*4
+
 # #############################################################################
 # METHODS
 # #############################################################################
@@ -145,17 +147,17 @@ def renderAnnotatedFrame(frame, elements: dict, design: dict):
     # draw homography
     if "homography" in elements:
         homography_circle = plt.Circle((elements["homography"][0], elements["homography"][1]), elements["homography"][2], 
-                                       # general
-                                       fill = design["homography"]["draw_fill"], 
-                                       alpha = design["homography"]["draw_alpha"], 
-                                       # Line Specific
-                                       edgecolor = design["homography"]["line_color"],
-                                       linestyle = design["homography"]["line_style"],
-                                       linewidth = design["homography"]["line_width"],
-                                       # Area / Fill Specific
-                                       facecolor = design["homography"]["fill_color"],
-                                       hatch = design["homography"]["fill_hatch"]
-                                       )
+                                        # general
+                                        fill = design["homography"]["draw_fill"], 
+                                        alpha = design["homography"]["draw_alpha"], 
+                                        # Line Specific
+                                        edgecolor = design["homography"]["line_color"],
+                                        linestyle = design["homography"]["line_style"],
+                                        linewidth = design["homography"]["line_width"],
+                                        # Area / Fill Specific
+                                        facecolor = design["homography"]["fill_color"],
+                                        hatch = design["homography"]["fill_hatch"]
+                                        )
         ax.add_patch(homography_circle)
     # draw region of interest
     if "region_of_interest" in elements:
@@ -195,7 +197,6 @@ def renderAnnotatedFrame(frame, elements: dict, design: dict):
     # labelled annotation
     if "labelled_vehicle_annnotations" in elements:
         for annotation in elements["labelled_vehicle_annnotations"]:
-            angle_deg = annotation[5]*360/2/3.14159
             WIDTH = annotation[3]
             HEIGHT = annotation[4]
             CENTER = (annotation[1] - WIDTH/2, annotation[2] - HEIGHT/2)
@@ -211,7 +212,38 @@ def renderAnnotatedFrame(frame, elements: dict, design: dict):
                       horizontalalignment='center',
                       color=design["labelled_vehicle_annnotations"]["font_color"],
                       fontsize=design["labelled_vehicle_annnotations"]["font_size"])
-                       
+    
+    # final trajectories
+    if "final_trajectory" in elements:
+        for idx, row in elements["final_trajectory"].iterrows():
+            WIDTH = row["v_Width"]
+            HEIGHT = row["v_Length"]
+            CENTER = (row["x_pixel"] - WIDTH/2, row["y_pixel"] - HEIGHT/2)
+            circle_patch = plt.Circle([row["x_pixel"], row["y_pixel"]], design["labelled_vehicle_annnotations"]["circle_radius"], fill=False, 
+                                        ec=design["labelled_vehicle_annnotations"]["line_color"], 
+                                        lw=design["labelled_vehicle_annnotations"]["line_width"], 
+                                        alpha=design["labelled_vehicle_annnotations"]["draw_alpha"],
+                                        linestyle=design["labelled_vehicle_annnotations"]["line_style"],)
+            ax.add_patch(circle_patch)
+            ax.scatter(row["x_pixel"], row["y_pixel"], color="white", s=20)
+            ax.text(row["x_pixel"], row["y_pixel"]-design["labelled_vehicle_annnotations"]["circle_radius"]-design["labelled_vehicle_annnotations"]["font_size"], 
+                      str(row["Vehicle_ID"]), 
+                      horizontalalignment='center',
+                      color=design["labelled_vehicle_annnotations"]["font_color"],
+                      fontsize=design["labelled_vehicle_annnotations"]["font_size"])
+    if "final_trajectory_history" in elements:
+        counter = 0
+        actual_history_length = len(elements["final_trajectory_history"])
+        for val in elements["final_trajectory_history"]:
+            if counter<10:
+                counter+=1
+                continue
+            for idx, row in val.iterrows():
+                WIDTH = row["v_Width"]
+                HEIGHT = row["v_Length"]
+                ax.scatter(row["x_pixel"], row["y_pixel"], color="blue", s=20, alpha=(1.0/actual_history_length)*(actual_history_length-counter))
+            counter += 1
+    
     # convert matplot canvas back to array
     fig.canvas.draw()
     frame_out = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
@@ -332,6 +364,8 @@ def renderAnnotatedVideo(video_file_path_source: str,
     start_frame_used = 0
     if start_frame is not None:
         start_frame_used = start_frame
+        for i in range(0, start_frame):
+            success, image = vidcap.read()
     for frame_counter in range(start_frame_used, num_frames):
         # Load Next Frame
         success, image = vidcap.read()
@@ -348,6 +382,25 @@ def renderAnnotatedVideo(video_file_path_source: str,
             frame_elements["homography"] = getFrameHomography(elements["homography"], frame_counter)
         if "region_of_interest" in elements:
             frame_elements["region_of_interest"] = getTransformedRegionOfInterest(elements["region_of_interest"], elements["homography"], frame_counter)      
+        if "labelled_final_trajectory" in elements:
+            df_final_trajectory = elements["labelled_final_trajectory"]
+            lst_df_history = []
+            for t_frame_counter in range(frame_counter, frame_counter-HISTORY_LENGTH, -1):
+                if t_frame_counter<0:
+                    continue
+                df_frame = df_final_trajectory[df_final_trajectory["Frame_ID"]==t_frame_counter]
+                positions_transformed_x = []
+                positions_transformed_y = []
+                for idx, row in df_frame.iterrows():
+                    pos = [row["Cartesian_X"], row["Cartesian_Y"]]
+                    posT = transformPointFrom_CARTESIAN_2_PIX(pos, frame_elements["homography"])
+                    positions_transformed_x.append(posT[0])
+                    positions_transformed_y.append(posT[1])
+                df_frame["x_pixel"] = positions_transformed_x
+                df_frame["y_pixel"] = positions_transformed_y
+                lst_df_history.append(df_frame)
+            frame_elements["final_trajectory"] = lst_df_history[0]
+            frame_elements["final_trajectory_history"] = lst_df_history
         edited_frame = renderAnnotatedFrame(image, frame_elements, design)
         if "transformation" in elements:
             df_kalman_vehicle_data = elements["transformation"]["kalman"]
@@ -356,6 +409,8 @@ def renderAnnotatedVideo(video_file_path_source: str,
             kalman_coordinate = kalman_annotations[4:5+1]
             kalman_frame_coordinates = transformPointFrom_CARTESIAN_2_PIX(kalman_coordinate, frame_elements["homography"])
             kalman_frame_angle = kalman_annotations[8]
+            if "norotation" in elements["transformation"]:
+                kalman_frame_angle = 0
             transformation = getVehicleEgoPerspectiveTransformation(edited_frame, kalman_frame_coordinates, kalman_frame_angle, elements["transformation"]["zoom"][frame_counter])
             edited_frame = renderTransformedFrame(edited_frame, transformation)
         if "hud" in elements:
@@ -483,8 +538,8 @@ def renderHUDAnnotatedFrame(frame, kalman_annotations, df_history, space_headway
     rect = patches.Rectangle((100-40, ystrt-250), 1000, 800, linewidth=1, edgecolor='none', facecolor='gray', alpha=0.5)
     ax.add_patch(rect)
     ax.text(lblx, ystrt-100-(fsize+sep)*1, "Historical Space Headway", color="white", fontsize=fsize)
-    xscatter = xstrt+np.arange(history_horizon+1)*8
     yscatter = (ystrt+(1-df_history["val"])*hstH).tolist()
+    xscatter = xstrt+np.arange(len(yscatter))*8
     if len(xscatter)==len(yscatter):
         ax.scatter(xscatter, yscatter, color="white", s=100)
         ax.scatter(xscatter[-1], yscatter[-1], color="cyan", s=400)

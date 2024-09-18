@@ -28,7 +28,7 @@ from tools_homography import transformPointFrom_CARTESIAN_2_PIX, transformAnnota
 # #############################################################################
 # CONSTANTS
 # #############################################################################
-RELEVANT_FRAME = 2000
+RELEVANT_FRAME = 3000
 RELEVANT_VIDEO = "DJI_0933.MOV"
 video_file_path = "C:/VIDEO_ETH/"+RELEVANT_VIDEO
 selected_vehicle = "VEHICLE_1"
