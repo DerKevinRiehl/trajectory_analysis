@@ -11,13 +11,16 @@ Submitted to:   JOURNAL
 # #############################################################################
 # IMPORTS
 # #############################################################################
-import os
+import os, sys
 import pandas as pd
 import numpy as np
 import json
 from tools_filtering_angle import boundAngleListPositive
 import _constants as cs
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import mode
 
 
 
@@ -29,8 +32,9 @@ def _determineVehiclesLaneCoordinateStartPositions(trajectory_df, start_frame=0)
     sel = trajectory_df[trajectory_df["frame_nr"]==start_frame]
     sel = _sort_by_vehicle_number(sel, vehicle_label_column="vehicle")
     # assume average radius for calculation
-    av_radius = np.mean(sel["y_polar"])
+    av_radius = np.median(sel["y_polar"])
     full_cirumference = 2*np.pi*av_radius
+    """
     # calculate difference between car and leader
     sel["lane_temp"] = sel["x_polar"]*av_radius
     sel["lane_temp_diff"] = sel["lane_temp"].diff(1)
@@ -43,8 +47,10 @@ def _determineVehiclesLaneCoordinateStartPositions(trajectory_df, start_frame=0)
             while new_val<0:
                 new_val += full_cirumference
             sel.loc[index, "lane_temp_diff"] = new_val
-    # calculate final offset
+    # TODO: calculate final offset
     sel["offset"] = sel["lane_temp_diff"].cumsum()
+    """
+    sel["offset"] = sel["x_polar"]*av_radius
     offset_df = sel[["vehicle", "offset"]]
     return offset_df, full_cirumference
 
@@ -138,7 +144,7 @@ def _integrate_lane_progress(lst_lane_progress):
             diff += val-last_val
         if val-last_val<-last_val*0.1:
             diff += val-last_val
-        new_vals.append(-(val-diff))
+        new_vals.append((val-diff))
         last_val = val
     return new_vals
 
@@ -204,16 +210,19 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
     trajectory_df["proceeding_vehicle"] = trajectory_df["vehicle"].map(vehicles_proceeding_order)
     
     # Calculate Polar Coordinates
-    trajectory_df["x_polar"] = np.arctan2(trajectory_df["y_cartesian"], trajectory_df["x_cartesian"])
-    trajectory_df["x_polar"] = boundAngleListPositive(trajectory_df["x_polar"], angle_format="rad")
-    trajectory_df["y_polar"] = np.linalg.norm(np.asarray([trajectory_df["x_cartesian"], trajectory_df["y_cartesian"]]), axis=0)
+    trajectory_df["x_polar"] = np.arctan2(-trajectory_df["state2"], trajectory_df["state1"])
+    trajectory_df.loc[trajectory_df["x_polar"] <= 0, "x_polar"] += 2*np.pi
+    trajectory_df["y_polar"] = np.linalg.norm(np.asarray([trajectory_df["state1"], -trajectory_df["state2"]]), axis=0)
+    # trajectory_df["x_polar"] = np.arctan2(trajectory_df["y_cartesian"], trajectory_df["x_cartesian"])
+    # trajectory_df["x_polar"] = boundAngleListPositive(trajectory_df["x_polar"], angle_format="rad")
+    # trajectory_df["y_polar"] = np.linalg.norm(np.asarray([trajectory_df["x_cartesian"], -trajectory_df["y_cartesian"]]), axis=0)
     
     # Calculate Lane Coordinates
     lane_coordinate_df = None
     for vehicle_id in unique_vehicles:
         vehicle_df = trajectory_df[trajectory_df["vehicle"]==vehicle_id].copy()
-        vehicle_df["x_lane"] = -vehicle_df["x_polar"]*vehicle_df["y_polar"]
-        vehicle_df["x_lane"] = _integrate_lane_progress(vehicle_df["x_lane"] )
+        vehicle_df["x_lane"] = vehicle_df["x_polar"]*vehicle_df["y_polar"]
+        vehicle_df["x_lane"] = _integrate_lane_progress(vehicle_df["x_lane"])
         vehicle_df["x_lane"] = _correctZeroDiffsRepeatedly(vehicle_df["x_lane"])
         vehicle_df["y_lane"] = vehicle_df["y_polar"]
         vehicle_df = vehicle_df[["frame_nr", "vehicle", "x_lane", "y_lane"]]
@@ -227,6 +236,7 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
     
     # Determine Relative Start Positions
     vehicles_lane_coord_start_position, full_circumference = _determineVehiclesLaneCoordinateStartPositions(trajectory_df)
+    first_vehicle = vehicles_lane_coord_start_position.loc[vehicles_lane_coord_start_position["offset"].idxmax(), "vehicle"]
     
     # Calculate References Lane Coordinates    
     trajectory_df = trajectory_df.merge(vehicles_lane_coord_start_position, left_on="vehicle", right_on="vehicle", how="left")
@@ -236,7 +246,7 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
     # Calculate Space Headway
     vehicle_positions = trajectory_df[["frame_nr", "vehicle", "x_lane_ref"]]
     trajectory_df = trajectory_df.merge(vehicle_positions, left_on=["frame_nr", "proceeding_vehicle"], right_on=["frame_nr", "vehicle"], how="left")
-    trajectory_df["space_headway"] = trajectory_df["x_lane_ref_x"] - trajectory_df["x_lane_ref_y"]
+    trajectory_df["space_headway"] = trajectory_df["x_lane_ref_y"] - trajectory_df["x_lane_ref_x"]
     trajectory_df.loc[trajectory_df["vehicle_x"]==first_vehicle, "space_headway"] = trajectory_df["space_headway"] + full_circumference
     del trajectory_df["vehicle_y"]
     del trajectory_df["x_lane_ref_y"]
