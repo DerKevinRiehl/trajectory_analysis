@@ -193,31 +193,10 @@ def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optio
     
     Returns
     -------
-    trajectory_df: pd.DataFrame
-        A dataframe containing the trajectory information for all vehicles; including cartesian velocity computed.
+    None
     """
     if end_frame is None:
         end_frame = trajectory_df["Frame_ID"].max()
-
-    unique_vehicles = trajectory_df["Vehicle_ID"].unique()
-    velocity_df = None
-    for vehicle_id in unique_vehicles:
-        vehicle_df = trajectory_df[trajectory_df["Vehicle_ID"] == vehicle_id].copy()
-        if not vehicle_df["Frame_ID"].is_monotonic_increasing:
-            vehicle_df = vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
-        vehicle_df = vehicle_df.reset_index().drop(columns=["index"])
-        sampling_interval = vehicle_df["Global_Time"].diff(1).mean()
-        vehicle_df["Velocity_X"] = vehicle_df["Cartesian_X"].diff(1).shift(1).fillna(0) / sampling_interval
-        vehicle_df["Velocity_Y"] = vehicle_df["Cartesian_Y"].diff(1).shift(1).fillna(0) / sampling_interval
-        vehicle_df["Cartesian_Velocity"] = np.sqrt(np.square(vehicle_df["Velocity_X"]) + np.square(vehicle_df["Velocity_Y"]))
-        vehicle_df = vehicle_df.drop(columns=["Velocity_X", "Velocity_Y"])
-        if velocity_df is None:
-            velocity_df = vehicle_df[["Frame_ID", "Vehicle_ID", "Cartesian_Velocity"]].copy()
-        else:
-            velocity_df = pd.concat((velocity_df, vehicle_df[["Frame_ID", "Vehicle_ID", "Cartesian_Velocity"]]))
-    trajectory_df = trajectory_df.merge(velocity_df, on=["Frame_ID", "Vehicle_ID"], how="left")
-    trajectory_df["Time_Hdwy_Modified"] = trajectory_df["Space_Hdwy"] / trajectory_df["Cartesian_Velocity"]
-    del velocity_df, vehicle_df
 
     plot_df = trajectory_df[(trajectory_df["Frame_ID"] >= start_frame) & (trajectory_df["Frame_ID"] <= end_frame)].copy()
     plot_df[["vehicleMeaningless","vehicleIndexNumber"]] = plot_df["Vehicle_ID"].str.split("_", n=1, expand=True)
@@ -227,12 +206,12 @@ def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optio
     
     palette = sns.color_palette(default_plotting_settings["color_palette"])
     fig, axs = plt.subplots(1, 3, figsize=[default_plotting_settings["figure_size"][0]*3, default_plotting_settings["figure_size"][1]])
-    p = sns.lineplot(data=plot_df, x="Global_Time", y="Cartesian_Velocity", hue="vehicleIndexNumber", ax=axs[0],
+    p = sns.lineplot(data=plot_df, x="Global_Time", y="v_Vel", hue="vehicleIndexNumber", ax=axs[0],
                  palette=palette, linewidth=default_plotting_settings["ObliqueTrajectories"]["line_width"])
     h, l = p.get_legend_handles_labels()
     sns.lineplot(data=plot_df, x="Global_Time", y="Space_Hdwy", hue="vehicleIndexNumber", ax=axs[1],
                  palette=palette, linewidth=default_plotting_settings["ObliqueTrajectories"]["line_width"])
-    sns.lineplot(data=plot_df, x="Global_Time", y="Time_Hdwy_Modified", hue="vehicleIndexNumber", ax=axs[2],
+    sns.lineplot(data=plot_df, x="Global_Time", y="Time_Hdwy", hue="vehicleIndexNumber", ax=axs[2],
                  palette=palette, linewidth=default_plotting_settings["ObliqueTrajectories"]["line_width"])
     
     axs[0].grid(alpha=default_plotting_settings["grid_alpha"], linestyle=default_plotting_settings["grid_line_style"])
@@ -242,6 +221,6 @@ def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optio
     axs[0].get_legend().remove()
     axs[1].get_legend().remove()
     axs[2].get_legend().remove()
-    fig.legend(h, l, loc="upper center", ncol=len(unique_vehicles), title="Vehicle ID", frameon=True)
+    fig.legend(h, l, loc="upper center", ncol=plot_df["Vehicle_ID"].nunique(), title="Vehicle ID", frameon=True)
 
     return trajectory_df
