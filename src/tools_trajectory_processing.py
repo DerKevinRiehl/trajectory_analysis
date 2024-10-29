@@ -238,8 +238,9 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
         else:
             vehicle_df["x_lane"] = pd.NA
 
-        vehicle_df["velocity_x"] = vehicle_df["state1"].diff(1).shift(1).fillna(0)
-        vehicle_df["velocity_y"] = vehicle_df["state2"].diff(1).shift(1).fillna(0)
+        sampling_interval = vehicle_df["time"].diff(1).mean()
+        vehicle_df["velocity_x"] = vehicle_df["state1"].diff(1).shift(1).fillna(0) / sampling_interval
+        vehicle_df["velocity_y"] = vehicle_df["state2"].diff(1).shift(1).fillna(0) / sampling_interval
         vehicle_df["velocity_cartesian"] = np.sqrt(np.square(vehicle_df["velocity_x"]) + np.square(vehicle_df["velocity_y"]))
 
         vehicle_df = vehicle_df[["frame_nr", "vehicle", "x_lane", "y_lane", "space_headway", "velocity_cartesian"]]
