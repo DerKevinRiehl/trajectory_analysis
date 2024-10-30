@@ -60,7 +60,6 @@ def calculatePlatoonConsistency_Headway(final_trajectory_df: pd.DataFrame, VIDEO
     vals_min = []
     vals_avg = []
     vals_std = []
-    normal_distance = []
     # determine proceeding order
     proceeding_order = {}
     for vehicle_id in unique_vehicles:
@@ -93,7 +92,6 @@ def calculatePlatoonConsistency_Headway(final_trajectory_df: pd.DataFrame, VIDEO
         vehicle_df["Space_Hdwy"] = vehicle_df["Space_Hdwy"] - vehicle_df["Space_Hdwy"].iloc[0]
         vehicle_df["space_headway_estimated_velocity"] = vehicle_df["space_headway_estimated_velocity"] - vehicle_df["space_headway_estimated_velocity"].iloc[0]
         scale_factor = vehicle_df["Space_Hdwy"].iloc[-1] / vehicle_df["space_headway_estimated_velocity"].iloc[-1]
-        normal_distance.append(vehicle_df["Space_Hdwy"].iloc[-1])
         vehicle_df["space_headway_estimated_velocity"] = vehicle_df["space_headway_estimated_velocity"] * scale_factor
         vehicle_df["headway_error"] = vehicle_df["space_headway_estimated_velocity"] - vehicle_df["Space_Hdwy"]
         # # account error statistics
@@ -106,7 +104,6 @@ def calculatePlatoonConsistency_Headway(final_trajectory_df: pd.DataFrame, VIDEO
     min_error = np.nanmean(vals_min)
     avg_error = np.nanmean(vals_avg)
     std_error = np.nanmean(vals_std)
-    normal_distance = np.nanmean(np.abs(normal_distance))
     return max_error, min_error, avg_error, std_error
 
 
