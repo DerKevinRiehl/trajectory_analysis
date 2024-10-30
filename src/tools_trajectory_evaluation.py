@@ -28,19 +28,19 @@ def calculateInternalConsistency(final_trajectory_df: pd.DataFrame, VIDEO_FRAME_
         # select relevant vehicle
         vehicle_df = final_trajectory_df[final_trajectory_df["Vehicle_ID"]==vehicle_id]
         # estimate trajectory based on velocity
-        vehicle_df = vehicle_df[["v_Vel", "Lane_X_Ref"]]
+        vehicle_df = vehicle_df[["v_Vel", "Lane_X"]]
         vehicle_df["v_Vel"] = abs(vehicle_df["v_Vel"])
         vehicle_df["s_frame"] = vehicle_df["v_Vel"] * (1 / VIDEO_FRAME_RATE)
         vehicle_df["trajectory_estimated_velocity"] = vehicle_df["s_frame"].cumsum()
         # cut tails away for comparison, as kalman filter not good at tails
         vehicle_df = vehicle_df[cutway_constant+10:-cutway_constant-10]
         # determine trajectory error
-        vehicle_df["Lane_X_Ref"] = vehicle_df["Lane_X_Ref"] - vehicle_df["Lane_X_Ref"].iloc[0]
+        vehicle_df["Lane_X"] = vehicle_df["Lane_X"] - vehicle_df["Lane_X"].iloc[0]
         vehicle_df["trajectory_estimated_velocity"] = vehicle_df["trajectory_estimated_velocity"] - vehicle_df["trajectory_estimated_velocity"].iloc[0]
-        scale_factor = vehicle_df["Lane_X_Ref"].iloc[-1] / vehicle_df["trajectory_estimated_velocity"].iloc[-1]
-        distance_travelled.append(vehicle_df["Lane_X_Ref"].iloc[-1])
-        vehicle_df["trajectory_estimated_velocity"] = vehicle_df["trajectory_estimated_velocity"] * scale_factor
-        vehicle_df["trajectory_error"] = vehicle_df["trajectory_estimated_velocity"] - vehicle_df["Lane_X_Ref"]
+        # scale_factor = vehicle_df["Lane_X"].iloc[-1] / vehicle_df["trajectory_estimated_velocity"].iloc[-1]
+        distance_travelled.append(vehicle_df["Lane_X"].iloc[-1])
+        # vehicle_df["trajectory_estimated_velocity"] = vehicle_df["trajectory_estimated_velocity"] * scale_factor
+        vehicle_df["trajectory_error"] = vehicle_df["trajectory_estimated_velocity"] - vehicle_df["Lane_X"]
         # account error statistics
         e_s_max, e_s_min, e_s_avg, e_s_std = determineErrorStatistics(vehicle_df["trajectory_error"])
         vals_max.append(e_s_max)
@@ -69,11 +69,11 @@ def calculatePlatoonConsistency_Headway(final_trajectory_df: pd.DataFrame, VIDEO
     for vehicle_id in unique_vehicles:
         # select relevant vehicle
         vehicle_df = final_trajectory_df[final_trajectory_df["Vehicle_ID"]==vehicle_id]
-        initial_position_x = vehicle_df["Lane_X_Ref"].iloc[0]
-        vehicle_df = vehicle_df[["Frame_ID", "v_Vel", "Lane_X_Ref", "Space_Hdwy"]]
+        initial_position_x = vehicle_df["Lane_X"].iloc[0]
+        vehicle_df = vehicle_df[["Frame_ID", "v_Vel", "Lane_X", "Space_Hdwy"]]
         sub_merge_df = final_trajectory_df[final_trajectory_df["Vehicle_ID"]==proceeding_order[vehicle_id]]
         # print(vehicle_id, proceeding_order[vehicle_id])
-        initial_position_y = sub_merge_df["Lane_X_Ref"].iloc[0]
+        initial_position_y = sub_merge_df["Lane_X"].iloc[0]
         sub_merge_df = sub_merge_df[["Frame_ID", "v_Vel",]]
         vehicle_df = vehicle_df.merge(sub_merge_df, on="Frame_ID", how="left")
         # estimate trajectory of vehicle and follower based on velocity
@@ -107,7 +107,7 @@ def calculatePlatoonConsistency_Headway(final_trajectory_df: pd.DataFrame, VIDEO
     avg_error = np.nanmean(vals_avg)
     std_error = np.nanmean(vals_std)
     normal_distance = np.nanmean(np.abs(normal_distance))
-    return max_error, min_error, avg_error, std_error, normal_distance
+    return max_error, min_error, avg_error, std_error
 
 
 
@@ -139,7 +139,8 @@ def calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df: pd.Dat
     return vals_violation, total_vehicle_frames
 
 
-"""
+
+
 print("=====================")
 print("Internal Consistency")
 print("=====================")
@@ -178,10 +179,11 @@ target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
 final_trajectory_df = pd.read_csv(target_output_file)
 print(RELEVANT_VIDEO)
 print (calculateInternalConsistency(final_trajectory_df, VIDEO_FRAME_RATE))
-"""
 
-"""
-print("=====================")
+
+
+
+print("\n=====================")
 print("Platoon Consistency")
 print("=====================")
 RELEVANT_VIDEO = "DJI_0933.MOV"
@@ -219,12 +221,12 @@ target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
 final_trajectory_df = pd.read_csv(target_output_file)
 print(RELEVANT_VIDEO)
 print (calculatePlatoonConsistency_Headway(final_trajectory_df, VIDEO_FRAME_RATE))
-"""
 
 
-"""
-print("=====================")
-print("Platoon Consistency")
+
+
+print("\n=====================")
+print("Platoon Consistency (Frames With Physically Impossible Distances)")
 print("=====================")
 RELEVANT_VIDEO = "DJI_0933.MOV"
 target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
@@ -261,4 +263,3 @@ target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
 final_trajectory_df = pd.read_csv(target_output_file)
 print(RELEVANT_VIDEO)
 print (calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df))
-"""

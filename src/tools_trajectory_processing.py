@@ -12,17 +12,11 @@ Submitted to:   JOURNAL
 # IMPORTS
 # #############################################################################
 import os
-import sys
 import json
 import warnings
 warnings.filterwarnings("ignore")
-
 import pandas as pd
 import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-from tools_filtering_angle import boundAngleListPositive
 import _constants as cs
 
 # #############################################################################
@@ -211,6 +205,7 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
     del vehicles_lane_coord_start_position
 
     # Calculate space headway in lane coordinates and velocity in cartesian coordinates
+    # And Lane Coordinates
     lane_coordinate_df = None
     for vehicle_id in unique_vehicles:
         vehicle_df = trajectory_df[trajectory_df["vehicle"]==vehicle_id].copy()
@@ -225,11 +220,7 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
         vehicle_df.loc[vehicle_df["angle_headway"] < 0, "angle_headway"] += 2*np.pi
         vehicle_df["space_headway_linear"] = np.sqrt((vehicle_df["state1"] - prec_vehicle_df["state1"])**2 + (vehicle_df["state2"] - prec_vehicle_df["state2"])**2)
         vehicle_df["space_headway"] = vehicle_df["space_headway_linear"] * vehicle_df["angle_headway"] / np.sqrt(2*(1-np.cos(vehicle_df["angle_headway"])))
-        #vehicle_df["space_headway_2"] = av_radius * vehicle_df["angle_headway"]
-        #print(np.mean(np.abs(vehicle_df["space_headway"] - vehicle_df["space_headway_2"])))
-
-        vehicle_df["y_lane"] = vehicle_df["y_polar"] #av_radius
-
+        vehicle_df["y_lane"] = vehicle_df["y_polar"]
         if vehicle_id == first_vehicle:
             vehicle_df["x_lane"] = vehicle_df["x_polar"]*vehicle_df["y_polar"]
             vehicle_df["x_lane"] = _integrate_lane_progress(vehicle_df["x_lane"])
@@ -237,12 +228,10 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
             vehicle_df["x_lane"] = vehicle_df["x_lane"] + vehicle_df["offset"]
         else:
             vehicle_df["x_lane"] = pd.NA
-
         sampling_interval = vehicle_df["time"].diff(1).mean()
         vehicle_df["velocity_x"] = vehicle_df["state1"].diff(1).shift(1).fillna(0) / sampling_interval
         vehicle_df["velocity_y"] = vehicle_df["state2"].diff(1).shift(1).fillna(0) / sampling_interval
         vehicle_df["velocity_cartesian"] = np.sqrt(np.square(vehicle_df["velocity_x"]) + np.square(vehicle_df["velocity_y"]))
-
         vehicle_df = vehicle_df[["frame_nr", "vehicle", "x_lane", "y_lane", "space_headway", "velocity_cartesian"]]
         if lane_coordinate_df is None:
             lane_coordinate_df = vehicle_df.copy()
@@ -252,7 +241,6 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
     lane_coordinate_df = lane_coordinate_df.drop(columns=["index"])
     trajectory_df = trajectory_df.merge(lane_coordinate_df, on=["frame_nr", "vehicle"], how="left")
     del lane_coordinate_df, vehicle_df, prec_vehicle_df
-
     remaining_vehicles = set(unique_vehicles) - set([first_vehicle])
     vehicle_id = first_vehicle
     vehicle_df = trajectory_df[trajectory_df["vehicle"]==vehicle_id].copy()
@@ -276,12 +264,11 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
     # Calculate Time Headway
     trajectory_df["time_headway"] = trajectory_df["space_headway"] / trajectory_df["velocity_cartesian"]
 
+    # Finalize Columns
     trajectory_df[["vehicleMeaningless","vehicleIndexNumber"]] = trajectory_df["vehicle"].str.split("_", n=1, expand=True)
     trajectory_df["vehicleIndexNumber"] = trajectory_df["vehicleIndexNumber"].astype(int)
     trajectory_df = trajectory_df.sort_values(by=["frame_nr", "vehicleIndexNumber"])
     trajectory_df = trajectory_df.drop(columns=["vehicleIndexNumber", "vehicleMeaningless"])
-    
-    # Finalize Columns
     trajectory_df = trajectory_df.rename(columns={    
             "frame_nr": "Frame_ID",
             "time": "Global_Time",

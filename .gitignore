@@ -164,3 +164,8 @@ cython_debug/
 # Videos
 *.mov
 *.MOV
+data/1_annotations/DJI_20240906110432_0012_D.MOV.zip
+data/1_homography/DJI_20240906110432_0012_D.MOV_circle.txt
+data/2_frame_processed/DJI_20240906110432_0012_D.MOV.txt
+data/2_frame_processed/DJI_20240906110432_0012_D.MOV_PIX.txt
+data/6_final_trajectories/DJI_0933.MOV.txt
