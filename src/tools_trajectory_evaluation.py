@@ -108,10 +108,6 @@ def calculatePlatoonConsistency_Headway(final_trajectory_df: pd.DataFrame, VIDEO
 
 
 
-RELEVANT_VIDEO = "DJI_0933.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-
 def calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df: pd.DataFrame):
     unique_vehicles = list(set(final_trajectory_df["Vehicle_ID"].tolist()))
     vals_violation = []
@@ -142,41 +138,18 @@ print("=====================")
 print("Internal Consistency")
 print("=====================")
 RELEVANT_VIDEO = "DJI_0933.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+#target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+target_output_file = "../data/6_final_trajectories_filtered/"+RELEVANT_VIDEO+"_V2.txt"
 final_trajectory_df = pd.read_csv(target_output_file)
 print(RELEVANT_VIDEO)
 print (calculateInternalConsistency(final_trajectory_df, VIDEO_FRAME_RATE))
 
 RELEVANT_VIDEO = "DJI_0934.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+#target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+target_output_file = "../data/6_final_trajectories_filtered/"+RELEVANT_VIDEO+"_V2.txt"
 final_trajectory_df = pd.read_csv(target_output_file)
 print(RELEVANT_VIDEO)
 print (calculateInternalConsistency(final_trajectory_df, VIDEO_FRAME_RATE))
-
-RELEVANT_VIDEO = "DJI_0939.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculateInternalConsistency(final_trajectory_df, VIDEO_FRAME_RATE))
-
-RELEVANT_VIDEO = "DJI_0940.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculateInternalConsistency(final_trajectory_df, VIDEO_FRAME_RATE))
-
-RELEVANT_VIDEO = "DJI_0943.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculateInternalConsistency(final_trajectory_df, VIDEO_FRAME_RATE))
-
-RELEVANT_VIDEO = "DJI_0944.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculateInternalConsistency(final_trajectory_df, VIDEO_FRAME_RATE))
-
 
 
 
@@ -184,79 +157,36 @@ print("\n=====================")
 print("Platoon Consistency")
 print("=====================")
 RELEVANT_VIDEO = "DJI_0933.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+#target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+target_output_file = "../data/6_final_trajectories_filtered/"+RELEVANT_VIDEO+"_V2.txt"
 final_trajectory_df = pd.read_csv(target_output_file)
 print(RELEVANT_VIDEO)
 print (calculatePlatoonConsistency_Headway(final_trajectory_df, VIDEO_FRAME_RATE))
 
 RELEVANT_VIDEO = "DJI_0934.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculatePlatoonConsistency_Headway(final_trajectory_df, VIDEO_FRAME_RATE))
-
-RELEVANT_VIDEO = "DJI_0939.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculatePlatoonConsistency_Headway(final_trajectory_df, VIDEO_FRAME_RATE))
-
-RELEVANT_VIDEO = "DJI_0940.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculatePlatoonConsistency_Headway(final_trajectory_df, VIDEO_FRAME_RATE))
-
-RELEVANT_VIDEO = "DJI_0943.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculatePlatoonConsistency_Headway(final_trajectory_df, VIDEO_FRAME_RATE))
-
-RELEVANT_VIDEO = "DJI_0944.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+#target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+target_output_file = "../data/6_final_trajectories_filtered/"+RELEVANT_VIDEO+"_V2.txt"
 final_trajectory_df = pd.read_csv(target_output_file)
 print(RELEVANT_VIDEO)
 print (calculatePlatoonConsistency_Headway(final_trajectory_df, VIDEO_FRAME_RATE))
 
 
-
+exit(1)
 
 print("\n=====================")
 print("Platoon Consistency (Frames With Physically Impossible Distances)")
 print("=====================")
 RELEVANT_VIDEO = "DJI_0933.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+#target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+target_output_file = "../data/6_final_trajectories_filtered/"+RELEVANT_VIDEO+".txt"
 final_trajectory_df = pd.read_csv(target_output_file)
 print(RELEVANT_VIDEO)
 print (calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df))
 
 RELEVANT_VIDEO = "DJI_0934.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+#target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
+target_output_file = "../data/6_final_trajectories_filtered/"+RELEVANT_VIDEO+".txt"
 final_trajectory_df = pd.read_csv(target_output_file)
 print(RELEVANT_VIDEO)
 print (calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df))
 
-RELEVANT_VIDEO = "DJI_0939.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df))
-
-RELEVANT_VIDEO = "DJI_0940.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df))
-
-RELEVANT_VIDEO = "DJI_0943.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df))
-
-RELEVANT_VIDEO = "DJI_0944.MOV"
-target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
-final_trajectory_df = pd.read_csv(target_output_file)
-print(RELEVANT_VIDEO)
-print (calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df))
