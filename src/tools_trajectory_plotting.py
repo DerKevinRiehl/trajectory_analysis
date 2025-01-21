@@ -60,7 +60,7 @@ def plot_time_space_diagram(trajectory_df: pd.DataFrame, start_frame: Optional[i
     palette = sns.color_palette(default_plotting_settings["color_palette"])
     plt.figure(figsize=default_plotting_settings["figure_size"])
     ax = sns.lineplot(plot_df, x="Global_Time", y="Lane_X", hue="vehicleIndexNumber", 
-                 palette=palette, linewidth=default_plotting_settings["TSD"]["line_width"])
+                 palette=palette, linewidth=default_plotting_settings["line_width"])
     plt.grid(alpha=default_plotting_settings["grid_alpha"], linestyle=default_plotting_settings["grid_line_style"])
     sns.move_legend(
         ax, "lower center",
@@ -78,7 +78,7 @@ def plot_time_space_diagram(trajectory_df: pd.DataFrame, start_frame: Optional[i
 
 
 def plot_oblique_trajectories(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None,
-                              vehicle_labels_in_plot: Optional[bool] = False, active_cursor: Optional[bool] = False):
+                              vehicle_labels_in_plot: Optional[bool] = False, active_cursor: Optional[bool] = False) -> None:
     """
     This methods plots the time space diagram showing the oblique x-lane coordinates of all vehicles across time.
     Oblique x-lane coordinates are extracted using a transformation in order to rotate the trajectories to be horizontal in the plot.
@@ -173,8 +173,7 @@ def plot_oblique_trajectories(trajectory_df: pd.DataFrame, start_frame: Optional
     plt.ylim([min_x, max_x])
 
 
-def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None,
-                              vehicle_labels_in_plot: Optional[bool] = False):
+def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None) -> None:
     """
     This methods plots the velocities, time headways and space headways across time for all vehicles.
 
@@ -186,10 +185,6 @@ def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optio
         The starting frame to begin plotting from.
     end_frame: Optional[int] = None
         The ending frame to end plotting at.
-    vehicle_labels_in_plot: Optional[bool] = False
-        Flag to add text annptations with vehicle IDs next to the trajectory end inside the plot.
-    active_cursor: Optional[bool] = False
-        Flag to activate mplcursors to show trajectory data when hovering.
     
     Returns
     -------
@@ -209,10 +204,14 @@ def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optio
     p = sns.lineplot(data=plot_df, x="Global_Time", y="v_Vel", hue="vehicleIndexNumber", ax=axs[0],
                  palette=palette, linewidth=default_plotting_settings["ObliqueTrajectories"]["line_width"])
     h, l = p.get_legend_handles_labels()
-    sns.lineplot(data=plot_df, x="Global_Time", y="Space_Hdwy", hue="vehicleIndexNumber", ax=axs[1],
-                 palette=palette, linewidth=default_plotting_settings["ObliqueTrajectories"]["line_width"])
+    try:
+        sns.lineplot(data=plot_df, x="Global_Time", y="Space_Hdwy", hue="vehicleIndexNumber", ax=axs[1],
+                 palette=palette, linewidth=default_plotting_settings["line_width"])
+    except:
+        print(plot_df.head())
+        sys.exit(1)
     sns.lineplot(data=plot_df, x="Global_Time", y="Time_Hdwy", hue="vehicleIndexNumber", ax=axs[2],
-                 palette=palette, linewidth=default_plotting_settings["ObliqueTrajectories"]["line_width"])
+                 palette=palette, linewidth=default_plotting_settings["line_width"])
     
     axs[0].grid(alpha=default_plotting_settings["grid_alpha"], linestyle=default_plotting_settings["grid_line_style"])
     axs[1].grid(alpha=default_plotting_settings["grid_alpha"], linestyle=default_plotting_settings["grid_line_style"])
@@ -222,5 +221,44 @@ def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optio
     axs[1].get_legend().remove()
     axs[2].get_legend().remove()
     fig.legend(h, l, loc="upper center", ncol=plot_df["Vehicle_ID"].nunique(), title="Vehicle ID", frameon=True)
+
+    return trajectory_df
+
+
+def plot_accelerations(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None) -> pd.DataFrame:
+    if not "v_Accel" in trajectory_df.columns:
+        unique_vehicles = trajectory_df["Vehicle_ID"].unique()
+        accel_df = None
+        for vehicle_id in unique_vehicles:
+            vehicle_df = trajectory_df[trajectory_df["Vehicle_ID"] == vehicle_id].copy()
+            if not vehicle_df["Frame_ID"].is_monotonic_increasing:
+                vehicle_df = vehicle_df.sort_values(by=["Frame_ID"])
+            sampling_interval = vehicle_df["Global_Time"].diff(1).mean()
+            vehicle_df["v_Accel"] = vehicle_df["v_Vel"].diff(1).shift(-1).fillna(0) / sampling_interval
+            vehicle_df = vehicle_df[["Frame_ID", "Vehicle_ID", "v_Accel"]]
+            if accel_df is None:
+                accel_df = vehicle_df.copy()
+            else:
+                accel_df = pd.concat((accel_df, vehicle_df))
+        trajectory_df = trajectory_df.merge(accel_df, on=["Frame_ID", "Vehicle_ID"], how="left")
+
+    if end_frame is None:
+        end_frame = trajectory_df["Frame_ID"].max()
+
+    plot_df = trajectory_df[(trajectory_df["Frame_ID"] >= start_frame) & (trajectory_df["Frame_ID"] <= end_frame)].copy()
+    plot_df[["vehicleMeaningless","vehicleIndexNumber"]] = plot_df["Vehicle_ID"].str.split("_", n=1, expand=True)
+    plot_df = plot_df.drop(columns=["vehicleMeaningless"])
+    plot_df["vehicleIndexNumber"] = plot_df["vehicleIndexNumber"].astype(int)
+    plot_df = plot_df.sort_values(by=["Frame_ID", "vehicleIndexNumber"])
+
+    plt.figure()
+    palette = sns.color_palette(default_plotting_settings["color_palette"])
+    ax = sns.lineplot(data=plot_df, x="Global_Time", y="v_Accel", hue="vehicleIndexNumber", 
+                      palette=palette, linewidth=default_plotting_settings["line_width"])
+    plt.grid(alpha=default_plotting_settings["grid_alpha"], linestyle=default_plotting_settings["grid_line_style"])
+    sns.move_legend(
+        ax, "lower center",
+        bbox_to_anchor=(.5, 1), ncol=7, title="Vehicle ID", frameon=True,
+    )
 
     return trajectory_df
