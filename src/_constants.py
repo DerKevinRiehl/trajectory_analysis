@@ -211,6 +211,9 @@ MAX_ALLOWED_OBB_DEVIATON_M = 0.5
 PROCESSING_INTEGRATION_CORRECTION_THRESHOLD = 0.00001
 PROCESSING_INTEGRATION_CORRECTION_REPETITIONS = 50
 
+######################################
+# TRAJECTORY FILTERING
+FILTERING_SAMPLING_FREQUENCY = 25.0
 
 
 ######################################
@@ -252,4 +255,21 @@ default_drawing_settings = {
         "font_color": "white",
         "font_size": 20,
     },
+}
+
+
+default_plotting_settings = {
+    "figure_size": [6.4, 6.4], # [width, height] in inches
+    "color_palette": "tab20",
+    "grid_alpha": 0.5,
+    "grid_line_style": "--",
+    "line_width": 1.5,
+    "ObliqueTrajectories": {
+        "line_width": 1.5,
+        "oblique_grid_line_style": "--",
+        "oblique_grid_line_width": 0.75,
+        "oblique_grid_line_color": "black", #tab:blue
+        "oblique_grid_num_ticks": 5,
+        "oblique_grid_alpha": 0.5,
+    }
 }
