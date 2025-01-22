@@ -37,8 +37,8 @@ from _constants import default_plotting_settings
 # #############################################################################
 # CONSTANTS
 # #############################################################################
-DATA_ROOT = "C:/Users/selbaklish/Desktop/Python_Workspace/OOBB/analysis/data/6_final_trajectories/"
-INFO_ROOT = "C:/Users/selbaklish/Desktop/Python_Workspace/OOBB/analysis/data/7_vehicle_information/"
+DATA_ROOT = "../data/6_final_trajectories/"
+INFO_ROOT = "../data/7_vehicle_information/"
 
 ALL_VIDEOS = [
     "DJI_0933.MOV", "DJI_0934.MOV", #"DJI_0939.MOV", "DJI_0940.MOV", "DJI_0943.MOV", "DJI_0944.MOV"
@@ -56,10 +56,13 @@ RELEVANT_VIDEO = "DJI_0933.MOV"
 # 1. Filtering
 # #############################################################################
 
-with open('../data/7_vehicle_information/accel_capacity_interpolator.pkl', 'rb') as f:
+with open('../data/5_vehicle_information/vehicle_dynamics/accel_capacity_interpolator.pkl', 'rb') as f:
     accel_max_spl = pickle.load(f)
-with open('../data/7_vehicle_information/decel_capacity_interpolator.pkl', 'rb') as f:
+with open('../data/5_vehicle_information/vehicle_dynamics/decel_capacity_interpolator.pkl', 'rb') as f:
     decel_min_spl = pickle.load(f)
+
+
+"""
 
 df = pd.read_csv(DATA_ROOT + RELEVANT_VIDEO + ".txt", sep=",")
 df = plot_accelerations(df)
@@ -114,10 +117,11 @@ for vehicle_id in unique_vehicles:
     plt.ylabel("Acceleration (m/s^2)")
     plt.legend()
     plt.show()
-sys.exit(1)
-
-
+# sys.exit(1)
 """
+
+
+# """
 df = pd.read_csv(DATA_ROOT + RELEVANT_VIDEO + ".txt", sep=",")
 plot_velocities_and_headways(df)
 df = plot_accelerations(df)
@@ -129,19 +133,19 @@ plt.show()
 #df_info = pd.read_csv(INFO_ROOT + RELEVANT_VIDEO + ".txt", sep="\t")
 #print(df_info)
 
-df = apply_physics_informed_butterworth_filter(df)
-#df = reconstruct_trajectories_cvxopt(df)
+# df = apply_physics_informed_butterworth_filter(df)
+df = reconstruct_trajectories_cvxopt(df, accel_max_spl, decel_min_spl)
 plot_time_space_diagram(df)
 plot_velocities_and_headways(df)
 plot_accelerations(df)
 plt.show()
 print(df.columns)
 
-target_output_file = "../data/6_final_trajectories_filtered/"+RELEVANT_VIDEO+"_V2.txt"
+target_output_file = "../data/7_final_trajectories_reconstructed/"+RELEVANT_VIDEO+"_cvxopt.txt"
 df.to_csv(target_output_file, index=False)
 
 sys.exit(1)
-"""
+# """
 
 # #############################################################################
 # 2. L2-gain Estimation

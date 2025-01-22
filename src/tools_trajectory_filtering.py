@@ -11,7 +11,6 @@ Submitted to:   JOURNAL
 # #############################################################################
 # IMPORTS
 # #############################################################################
-import os
 import sys
 import pickle
 import warnings
@@ -20,12 +19,10 @@ warnings.filterwarnings("ignore")
 import numpy as np
 import pandas as pd
 import cvxpy as cp
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 from scipy import signal
-from scipy.interpolate import CubicSpline, Akima1DInterpolator
-from scipy.integrate import cumulative_trapezoid, cumulative_simpson
+from scipy.interpolate import CubicSpline
+from scipy.integrate import cumulative_simpson
 from scipy.optimize import isotonic_regression
 from numpy.lib.stride_tricks import sliding_window_view
 
@@ -35,23 +32,19 @@ from _constants import FILTERING_SAMPLING_FREQUENCY
 # #############################################################################
 # METHODS: Constrained Optimization Approach
 # #############################################################################
-def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame) -> pd.DataFrame:
-    with open('../data/7_vehicle_information/accel_capacity_interpolator.pkl', 'rb') as f:
-        accel_max_spl = pickle.load(f)
-    with open('../data/7_vehicle_information/decel_capacity_interpolator.pkl', 'rb') as f:
-        decel_min_spl = pickle.load(f)
-    
+def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: pd.DataFrame, decel_min_spl: pd.DataFrame) -> pd.DataFrame:
     reconstructed_trajectory_df = None
 
     begin_df = trajectory_df[trajectory_df["Frame_ID"] == 0].copy()
     idx = begin_df["Lane_X"].idxmin()
-    first_vehicle = begin_df.loc[idx, "Vehicle_ID"]
     idx = begin_df["Lane_X"].idxmax()
     last_vehicle = begin_df.loc[idx, "Vehicle_ID"]
     del idx, begin_df
 
     remaining_vehicles = set(trajectory_df["Vehicle_ID"].unique())
     vehicle_id = last_vehicle
+    prec_vehicle_df = None
+    prec_vehicle_length = None
     while len(remaining_vehicles) > 0:
         print(vehicle_id, len(remaining_vehicles))
         vehicle_df = trajectory_df[trajectory_df["Vehicle_ID"] == vehicle_id].copy()
@@ -99,8 +92,12 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame) -> pd.DataFrame
                     cnst += [
                         x_lead[t+1] - prec_vehicle_length - (x_noised[0] + cp.sum(v_recon[:t])/FILTERING_SAMPLING_FREQUENCY) >= 1.0
                     ]
-            prob = cp.Problem(cp.Minimize(obj), cnst)
-            prob.solve(verbose=False)
+            try: # try with default solver "CLARABEL"
+                prob = cp.Problem(cp.Minimize(obj), cnst)            
+                prob.solve(verbose=False)
+            except: # use ECOS alternatively
+                prob = cp.Problem(cp.Minimize(obj), cnst)          
+                prob.solve(solver=cp.ECOS, verbose=False)
             try:
                 speed_recon[k:k+w_recon] = v_recon.value
                 accel_recon[k:k+w_recon-1] = a_recon.value
@@ -273,7 +270,6 @@ def _filter_speed_butterworth(trajectory_df: pd.DataFrame, cutoff_freq: float = 
 def _reconstruct_trajectories(trajectory_df: pd.DataFrame) -> pd.DataFrame:
     reconstructed_trajectory_df = None
 
-    total_space_hdwys = trajectory_df.groupby(by=["Frame_ID"])["Space_Hdwy"].sum()
     begin_df = trajectory_df[trajectory_df["Frame_ID"] == 0].copy()
     idx = begin_df["Lane_X"].idxmin()
     first_vehicle = begin_df.loc[idx, "Vehicle_ID"]

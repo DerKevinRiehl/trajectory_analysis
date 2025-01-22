@@ -26,8 +26,10 @@ from tools_trajectorization import generateTrajectories, determineUniqueTrajecto
 from tools_trajectorization import generateEmptyTrajectoryLabelVehicleMap, loadTrajectoryLabelVehicleMap
 from tools_filtering import calculateKalmanFilteredTrajectory, alignTrajectories, featureCalculation
 from tools_trajectory_processing import processTrajectory
+from tools_trajectory_filtering import reconstruct_trajectories_cvxopt
 import numpy as np
-
+import pickle
+import pandas as pd
 
 
 # #############################################################################
@@ -36,10 +38,10 @@ import numpy as np
 #RELEVANT_FRAME = 2000
 RELEVANT_VIDEO = "DJI_0933.MOV"
 RELEVANT_VIDEO = "DJI_0934.MOV"
-RELEVANT_VIDEO = "DJI_0939.MOV"
-RELEVANT_VIDEO = "DJI_0940.MOV"
+# RELEVANT_VIDEO = "DJI_0939.MOV"
+# RELEVANT_VIDEO = "DJI_0940.MOV"
 RELEVANT_VIDEO = "DJI_0943.MOV"
-RELEVANT_VIDEO = "DJI_0944.MOV"
+# RELEVANT_VIDEO = "DJI_0944.MOV"
 
 
 
@@ -164,7 +166,7 @@ for selected_vehicle in unique_vehicles:
 
 
 
-
+"""
 # #############################################################################
 # STEP 4: TRAJECTORY PROCESSING
 # #############################################################################
@@ -179,13 +181,6 @@ target_output_file = "../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt"
 final_trajectory_df = processTrajectory(video_trajectory_path, vehiclized_file_path, 
                   vehicle_proceeding_order_file_path, trajectory_type, first_vehicle)
 final_trajectory_df.to_csv(target_output_file, index=False)
-
-
-
-
-
-
-
 
 
 # # Code to display raw and Kalman filtered trajectories to compare
@@ -209,3 +204,21 @@ final_trajectory_df.to_csv(target_output_file, index=False)
 # plt.plot(df_filtered_hbb["frame_nr"], df_filtered_hbb["y"], label="HBB filtered")
 # plt.plot(df_filtered_obb["frame_nr"], df_filtered_obb["y"], label="OBB filtered")
 # plt.legend()
+"""
+
+
+# #############################################################################
+# STEP 5: TRAJECTORY RECONSTRUCTION
+# #############################################################################
+
+vehicle_trajectory_final_path = "../data/6_final_trajectories/"
+vehicle_dynamics_path = "../data/5_vehicle_information/vehicle_dynamics/"
+vehicle_trajectory_reconstructed_path = "../data/7_final_trajectories_reconstructed/"
+
+with open(vehicle_dynamics_path+"accel_capacity_interpolator.pkl", "rb") as f:
+    accel_max_spl = pickle.load(f)
+with open(vehicle_dynamics_path+"decel_capacity_interpolator.pkl", "rb") as f:
+    decel_min_spl = pickle.load(f)
+df_final_traj = pd.read_csv(vehicle_trajectory_final_path + RELEVANT_VIDEO + ".txt", sep=",")
+df_reconst_traj = reconstruct_trajectories_cvxopt(df_final_traj, accel_max_spl, decel_min_spl)
+df_reconst_traj.to_csv(vehicle_trajectory_reconstructed_path+RELEVANT_VIDEO+".txt", index=False)
