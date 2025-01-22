@@ -1,0 +1,2 @@
+This mapper automatically mapped the trajectory fragments to the vehicle trajectories based on a ground truth
+The groundtruth was created manually for video DJI_0933.MOV using s2a model.

@@ -35,12 +35,11 @@ import pandas as pd
 # #############################################################################
 # CONSTANTS
 # #############################################################################
-#RELEVANT_FRAME = 2000
 RELEVANT_VIDEO = "DJI_0933.MOV"
-RELEVANT_VIDEO = "DJI_0934.MOV"
+# RELEVANT_VIDEO = "DJI_0934.MOV"
 # RELEVANT_VIDEO = "DJI_0939.MOV"
 # RELEVANT_VIDEO = "DJI_0940.MOV"
-RELEVANT_VIDEO = "DJI_0943.MOV"
+# RELEVANT_VIDEO = "DJI_0943.MOV"
 # RELEVANT_VIDEO = "DJI_0944.MOV"
 
 
