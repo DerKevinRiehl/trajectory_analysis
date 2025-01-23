@@ -135,7 +135,7 @@ def calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df: pd.Dat
 
 
 
-
+"""
 print("=====================")
 print("Internal Consistency")
 print("=====================")
@@ -191,4 +191,4 @@ print (calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df))
 # final_trajectory_df = pd.read_csv(target_output_file)
 # print(RELEVANT_VIDEO)
 # print (calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df))
-
+"""
