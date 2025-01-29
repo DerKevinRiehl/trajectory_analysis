@@ -76,7 +76,9 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
             a_driver_max = 0.5 * a_max
             a_min = max(decel_min_spl(v_noised[0]), decel_min_spl(np.mean(v_filtered)))
 
-            v_recon = cp.Variable(shape=(len(v_noised),))
+            v_scale = np.max(np.abs(v_filtered))
+            v_recon = cp.Variable(shape=(len(v_noised),)) * v_scale
+            # v_recon = cp.Variable(shape=(len(v_noised),))
             a_recon = cp.diff(v_recon, k=1) * FILTERING_SAMPLING_FREQUENCY
             lam_soft_cnst = 0.05
             obj = cp.norm(v_recon - v_filtered, 2)**2 + cp.std(a_recon)**2 + cp.sum(lam_soft_cnst * (a_recon/a_driver_max - 1))
@@ -93,11 +95,20 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
                         x_lead[t+1] - prec_vehicle_length - (x_noised[0] + cp.sum(v_recon[:t])/FILTERING_SAMPLING_FREQUENCY) >= 1.0
                     ]
             try: # try with default solver "CLARABEL"
+                mosek_params = {
+                    'MSK_DPAR_INTPNT_CO_TOL_REL_GAP': 1e-6,  # Tolerance for relative gap
+                    # 'MSK_DPAR_OPTIMIZER_MAX_TIME': 100.0,    # Set a time limit
+                    'MSK_IPAR_INTPNT_SOLVE_FORM': 'MSK_SOLVE_DUAL'  # Solve dual explicitly
+                }
                 prob = cp.Problem(cp.Minimize(obj), cnst)            
-                prob.solve(verbose=False)
+                prob.solve(solver=cp.MOSEK, mosek_params=mosek_params, verbose=True)
             except: # use ECOS alternatively
+                # try:
+                #     prob = cp.Problem(cp.Minimize(obj), cnst)          
+                #     prob.solve(solver=cp.ECOS, verbose=False)
+                # except:
                 prob = cp.Problem(cp.Minimize(obj), cnst)          
-                prob.solve(solver=cp.ECOS, verbose=False)
+                prob.solve(solver=cp.SCS, verbose=False)
             try:
                 speed_recon[k:k+w_recon] = v_recon.value
                 accel_recon[k:k+w_recon-1] = a_recon.value

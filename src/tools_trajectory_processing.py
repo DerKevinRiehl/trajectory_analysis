@@ -308,3 +308,102 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
             "Time_Hdwy"
         ]]
     return trajectory_df
+
+def processTrajectory_synthetic(trajectory_df):
+    """
+    This method loads the Kalman filtered trajectories from all vehicles in a given video.
+
+    Parameters
+    ----------
+    trajectory_df: pd.DataFrame
+        The synthetically generated trajectory that was Kalman filtered.
+        
+    Returns
+    -------
+    trajectory_df: pd.DataFrame
+        The final trajectory dataframe.
+    """
+    # Load Trajectories For All Vehicles
+    unique_vehicles = ["VEHICLE_1"]
+    # Determine Vehicle Dimensions
+    trajectory_df["width"] = 5
+    trajectory_df["height"] = 5
+    # Determine Proceeding Vehicle
+    trajectory_df["proceeding_vehicle"] = "VEHICLE_1"
+    # Calculate Polar Coordinates
+    trajectory_df["x_polar"] = np.arctan2(-trajectory_df["state2"], trajectory_df["state1"])
+    trajectory_df.loc[trajectory_df["x_polar"] <= 0, "x_polar"] += 2*np.pi
+    trajectory_df["y_polar"] = np.linalg.norm(np.asarray([trajectory_df["state1"], -trajectory_df["state2"]]), axis=0)
+    # Determine Relative Start Positions
+    vehicles_lane_coord_start_position, av_radius = _determineVehiclesLaneCoordinateStartPositions(trajectory_df)
+    first_vehicle = vehicles_lane_coord_start_position.loc[vehicles_lane_coord_start_position["offset"].idxmin(), "vehicle"]
+    trajectory_df = trajectory_df.merge(vehicles_lane_coord_start_position, left_on="vehicle", right_on="vehicle", how="left")
+    del vehicles_lane_coord_start_position
+    # Calculate space headway in lane coordinates and velocity in cartesian coordinates
+    # And Lane Coordinates
+    lane_coordinate_df = None
+    for vehicle_id in unique_vehicles:
+        vehicle_df = trajectory_df[trajectory_df["vehicle"]==vehicle_id].copy()
+        if not vehicle_df["frame_nr"].is_monotonic_increasing:
+            vehicle_df = vehicle_df.sort_values(by="frame_nr", ascending=True)
+        vehicle_df = vehicle_df.reset_index().drop(columns=["index"])
+        vehicle_df["y_lane"] = vehicle_df["y_polar"]
+        if vehicle_id == first_vehicle:
+            vehicle_df["x_lane"] = vehicle_df["x_polar"]*vehicle_df["y_polar"]
+            vehicle_df["x_lane"] = _integrate_lane_progress(vehicle_df["x_lane"])
+            vehicle_df["x_lane"] = _correctZeroDiffsRepeatedly(vehicle_df["x_lane"])
+            vehicle_df["x_lane"] = vehicle_df["x_lane"] + vehicle_df["offset"]
+        else:
+            vehicle_df["x_lane"] = pd.NA
+        sampling_interval = vehicle_df["time"].diff(1).mean()
+        vehicle_df["velocity_x"] = vehicle_df["state1"].diff(1).shift(1).fillna(0) / sampling_interval
+        vehicle_df["velocity_y"] = vehicle_df["state2"].diff(1).shift(1).fillna(0) / sampling_interval
+        vehicle_df["velocity_cartesian"] = np.sqrt(np.square(vehicle_df["velocity_x"]) + np.square(vehicle_df["velocity_y"]))
+        vehicle_df = vehicle_df[["frame_nr", "vehicle", "x_lane", "y_lane", "velocity_cartesian"]]
+        if lane_coordinate_df is None:
+            lane_coordinate_df = vehicle_df.copy()
+        else:
+            lane_coordinate_df = pd.concat((lane_coordinate_df, vehicle_df))
+    lane_coordinate_df = lane_coordinate_df.reset_index()
+    lane_coordinate_df = lane_coordinate_df.drop(columns=["index"])
+    trajectory_df = trajectory_df.merge(lane_coordinate_df, on=["frame_nr", "vehicle"], how="left")
+    # Finalize Columns
+    trajectory_df[["vehicleMeaningless","vehicleIndexNumber"]] = trajectory_df["vehicle"].str.split("_", n=1, expand=True)
+    trajectory_df["vehicleIndexNumber"] = trajectory_df["vehicleIndexNumber"].astype(int)
+    trajectory_df = trajectory_df.sort_values(by=["frame_nr", "vehicleIndexNumber"])
+    trajectory_df = trajectory_df.drop(columns=["vehicleIndexNumber", "vehicleMeaningless"])
+    trajectory_df = trajectory_df.rename(columns={    
+            "frame_nr": "Frame_ID",
+            "time": "Global_Time",
+            "state1": "Cartesian_X",
+            "state2": "Cartesian_Y",
+            "state3": "v_Angle",
+            "velocity_cartesian": "v_Vel",
+            "state5": "v_AngleVel",
+            "width": "v_Width",
+            "height": "v_Length",
+            "proceeding_vehicle": "Proceeding",
+            "x_polar": "Polar_X",
+            "y_polar": "Polar_Y",
+            "x_lane": "Lane_X",
+            "y_lane": "Lane_Y",
+            "vehicle": "Vehicle_ID"
+        })
+    trajectory_df = trajectory_df[[
+            "Vehicle_ID",
+            "Frame_ID",
+            "Global_Time",
+            "Cartesian_X",
+            "Cartesian_Y",
+            "Polar_X",
+            "Polar_Y",
+            "Lane_X",
+            "Lane_Y",
+            "v_Length",
+            "v_Width",
+            "v_Vel",
+            "v_Angle",
+            "v_AngleVel",
+            "Proceeding"
+        ]]
+    return trajectory_df

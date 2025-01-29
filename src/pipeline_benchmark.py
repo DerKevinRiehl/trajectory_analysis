@@ -64,7 +64,7 @@ models = [
 RELEVANT_MODEL = models[0]
 RELEVANT_MODEL = models[17]
 
-RELEVANT_MODEL = models[0]
+RELEVANT_MODEL = models[16]
 
 # #############################################################################
 # LOADING - FILES
@@ -169,7 +169,7 @@ for selected_vehicle in unique_vehicles:
 
 
 
-"""
+# """
 # #############################################################################
 # STEP 4: TRAJECTORY PROCESSING
 # #############################################################################
@@ -179,22 +179,22 @@ vehiclized_file_path = "../data_benchmark/3_C_vehiclized/"+RELEVANT_MODEL+".txt"
 vehicle_proceeding_order_file_path = "../data_benchmark/5_vehicle_information/proceeding_order/"+RELEVANT_VIDEO+".txt"
 first_vehicle = "VEHICLE_1"
 
-target_output_file = "../data_benchmark/6_final_trajectories/"+RELEVANT_MODEL+"_OBB.txt"
-trajectory_type = "obb"
-final_trajectory_df = processTrajectory(video_trajectory_path, vehiclized_file_path, 
-                  vehicle_proceeding_order_file_path, trajectory_type, first_vehicle)
-final_trajectory_df.to_csv(target_output_file, index=False)
-
 target_output_file = "../data_benchmark/6_final_trajectories/"+RELEVANT_MODEL+"_HBB.txt"
 trajectory_type = "hbb"
 final_trajectory_df = processTrajectory(video_trajectory_path, vehiclized_file_path, 
                   vehicle_proceeding_order_file_path, trajectory_type, first_vehicle)
 final_trajectory_df.to_csv(target_output_file, index=False)
+
+target_output_file = "../data_benchmark/6_final_trajectories/"+RELEVANT_MODEL+"_OBB.txt"
+trajectory_type = "obb"
+final_trajectory_df = processTrajectory(video_trajectory_path, vehiclized_file_path, 
+                  vehicle_proceeding_order_file_path, trajectory_type, first_vehicle)
+final_trajectory_df.to_csv(target_output_file, index=False)
 # """
 
 
 
-# """
+"""
 # #############################################################################
 # STEP 5: TRAJECTORY RECONSTRUCTION
 # #############################################################################
@@ -216,4 +216,4 @@ trajectory_type = "hbb"
 df_final_traj = pd.read_csv(vehicle_trajectory_final_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", sep=",")
 df_reconst_traj = reconstruct_trajectories_cvxopt(df_final_traj, accel_max_spl, decel_min_spl)
 df_reconst_traj.to_csv(vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", index=False)
-# """
+"""
