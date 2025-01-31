@@ -64,7 +64,7 @@ models = [
 RELEVANT_MODEL = models[0]
 RELEVANT_MODEL = models[17]
 
-RELEVANT_MODEL = models[16]
+RELEVANT_MODEL = models[17]
 
 # #############################################################################
 # LOADING - FILES
@@ -169,7 +169,7 @@ for selected_vehicle in unique_vehicles:
 
 
 
-# """
+"""
 # #############################################################################
 # STEP 4: TRAJECTORY PROCESSING
 # #############################################################################
@@ -190,11 +190,11 @@ trajectory_type = "obb"
 final_trajectory_df = processTrajectory(video_trajectory_path, vehiclized_file_path, 
                   vehicle_proceeding_order_file_path, trajectory_type, first_vehicle)
 final_trajectory_df.to_csv(target_output_file, index=False)
-# """
-
-
-
 """
+
+
+
+# """
 # #############################################################################
 # STEP 5: TRAJECTORY RECONSTRUCTION
 # #############################################################################
@@ -208,12 +208,12 @@ with open(vehicle_dynamics_path+"accel_capacity_interpolator.pkl", "rb") as f:
 with open(vehicle_dynamics_path+"decel_capacity_interpolator.pkl", "rb") as f:
     decel_min_spl = pickle.load(f)
 
-trajectory_type = "obb"
-df_final_traj = pd.read_csv(vehicle_trajectory_final_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", sep=",")
-df_reconst_traj = reconstruct_trajectories_cvxopt(df_final_traj, accel_max_spl, decel_min_spl)
-df_reconst_traj.to_csv(vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", index=False)
 trajectory_type = "hbb"
 df_final_traj = pd.read_csv(vehicle_trajectory_final_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", sep=",")
 df_reconst_traj = reconstruct_trajectories_cvxopt(df_final_traj, accel_max_spl, decel_min_spl)
 df_reconst_traj.to_csv(vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", index=False)
-"""
+trajectory_type = "obb"
+df_final_traj = pd.read_csv(vehicle_trajectory_final_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", sep=",")
+df_reconst_traj = reconstruct_trajectories_cvxopt(df_final_traj, accel_max_spl, decel_min_spl)
+df_reconst_traj.to_csv(vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", index=False)
+# """
