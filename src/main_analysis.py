@@ -14,6 +14,8 @@ Submitted to:   JOURNAL
 import sys
 import pickle
 import warnings
+
+import scipy.interpolate
 warnings.filterwarnings("ignore")
 
 import numpy as np
@@ -60,7 +62,6 @@ with open('../data/5_vehicle_information/vehicle_dynamics/accel_capacity_interpo
     accel_max_spl = pickle.load(f)
 with open('../data/5_vehicle_information/vehicle_dynamics/decel_capacity_interpolator.pkl', 'rb') as f:
     decel_min_spl = pickle.load(f)
-
 
 """
 

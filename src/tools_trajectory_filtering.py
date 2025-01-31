@@ -22,6 +22,7 @@ import cvxpy as cp
 
 from scipy import signal
 from scipy.interpolate import CubicSpline
+from scipy.interpolate._interpolate import PPoly
 from scipy.integrate import cumulative_simpson
 from scipy.optimize import isotonic_regression
 from numpy.lib.stride_tricks import sliding_window_view
@@ -32,7 +33,31 @@ from _constants import FILTERING_SAMPLING_FREQUENCY
 # #############################################################################
 # METHODS: Constrained Optimization Approach
 # #############################################################################
-def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: pd.DataFrame, decel_min_spl: pd.DataFrame) -> pd.DataFrame:
+def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: PPoly, decel_min_spl: PPoly,
+                                    recon_window: float = 10.0, recon_step: float = 8.0) -> pd.DataFrame:
+    """
+    This method performs traectory reconstruction/filtering through a constrained optimization problem.
+    Each vehicle trajectory is filtered by windowing for a specific time period and then stepping through to the next.
+    The trajectory is optimized for physical plausibility and consistency.
+
+    Parameters:
+    -----------
+        trajectory_df: pd.DataFrame
+            contains processed unfiltered trajectories of all vehicles in the experiment
+        accel_max_spl: PPoly
+            Cubic spline definig the acceleration capacity versus speed curve for a model vehicle
+        decel_min_spl: PPoly
+            Cubic spline definig the acceleration capacity versus speed curve for a model vehicle
+        recon_window: float = 10.0
+            Reconstruction window in seconds
+        recon_step: float = 8.0
+            Step size to move reconstruction window in seconds, needs to less than or equal recon_window
+    
+    Returns:
+    --------
+        reconstructed_trajectory_df: pd.DataFrame
+            contains reconstructed trajectories of all vehicles in the experiment
+    """
     reconstructed_trajectory_df = None
 
     begin_df = trajectory_df[trajectory_df["Frame_ID"] == 0].copy()
@@ -46,20 +71,29 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
     prec_vehicle_df = None
     prec_vehicle_length = None
     while len(remaining_vehicles) > 0:
-        print(vehicle_id, len(remaining_vehicles))
+        print(f"Now handling {vehicle_id} with {len(remaining_vehicles)} remaining vehicles.")
         vehicle_df = trajectory_df[trajectory_df["Vehicle_ID"] == vehicle_id].copy()
         if not vehicle_df["Frame_ID"].is_monotonic_increasing:
             vehicle_df = vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
         vehicle_df = vehicle_df.reset_index().drop(columns=["index"])
+        
+        # Handle noise in x-lane coordinate through an isotonic regression
+        if not vehicle_df["Lane_X"].is_monotonic_increasing:
+            res = isotonic_regression(vehicle_df["Lane_X"].to_numpy(), increasing=True)
+            vehicle_df["Lane_X"] = res.x
+            vehicle_df["v_Vel"] = vehicle_df["Lane_X"].diff(1).shift(-1).fillna(0) * FILTERING_SAMPLING_FREQUENCY
+            vehicle_df["v_Accel"] = vehicle_df["v_Vel"].diff(1).shift(-1).fillna(0) * FILTERING_SAMPLING_FREQUENCY
 
+        # Handle noise in velocity and acceleration through the optimization procedure
         if vehicle_id != last_vehicle:
             lead_position = prec_vehicle_df["Lane_X"].to_numpy()
         position = vehicle_df["Lane_X"].to_numpy()
+        # speed = vehicle_df["v_Vel"].to_numpy()
         speed = np.diff(position, n=1) * FILTERING_SAMPLING_FREQUENCY
         accel = np.diff(speed, n=1) * FILTERING_SAMPLING_FREQUENCY
 
-        w_recon = int(10.0*FILTERING_SAMPLING_FREQUENCY)
-        step = int(8.0*FILTERING_SAMPLING_FREQUENCY)
+        w_recon = int(recon_window*FILTERING_SAMPLING_FREQUENCY)
+        step = int(recon_step*FILTERING_SAMPLING_FREQUENCY)
 
         sos = signal.butter(N=1, Wn=0.75, btype='lowpass', fs=FILTERING_SAMPLING_FREQUENCY, output='sos')
         speed_filtered = signal.sosfilt(sos, speed)
@@ -76,9 +110,9 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
             a_driver_max = 0.5 * a_max
             a_min = max(decel_min_spl(v_noised[0]), decel_min_spl(np.mean(v_filtered)))
 
-            v_scale = np.max(np.abs(v_filtered))
-            v_recon = cp.Variable(shape=(len(v_noised),)) * v_scale
-            # v_recon = cp.Variable(shape=(len(v_noised),))
+            # v_scale = np.max(np.abs(v_filtered))
+            # v_recon = cp.Variable(shape=(len(v_noised),)) * v_scale
+            v_recon = cp.Variable(shape=(len(v_noised),))
             a_recon = cp.diff(v_recon, k=1) * FILTERING_SAMPLING_FREQUENCY
             lam_soft_cnst = 0.05
             obj = cp.norm(v_recon - v_filtered, 2)**2 + cp.std(a_recon)**2 + cp.sum(lam_soft_cnst * (a_recon/a_driver_max - 1))
@@ -101,7 +135,7 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
                     'MSK_IPAR_INTPNT_SOLVE_FORM': 'MSK_SOLVE_DUAL'  # Solve dual explicitly
                 }
                 prob = cp.Problem(cp.Minimize(obj), cnst)            
-                prob.solve(solver=cp.MOSEK, mosek_params=mosek_params, verbose=True)
+                prob.solve(solver=cp.MOSEK, mosek_params=mosek_params, verbose=False)
             except: # use ECOS alternatively
                 # try:
                 #     prob = cp.Problem(cp.Minimize(obj), cnst)          
@@ -137,8 +171,10 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
         prec_vehicle_df = vehicle_df
         prec_vehicle_length = prec_vehicle_df["v_Length"].mean()
 
+    print("Trajectory reconstruction FINISHED.")
     reconstructed_trajectory_df = reconstructed_trajectory_df.reset_index().drop(columns=["index"])
-    reconstructed_trajectory_df = _recompute_headways(reconstructed_trajectory_df)
+    if trajectory_df["Vehicle_ID"].nunique() > 1:
+        reconstructed_trajectory_df = _recompute_headways(reconstructed_trajectory_df)
     return reconstructed_trajectory_df
 
 
