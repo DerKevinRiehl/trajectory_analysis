@@ -84,6 +84,7 @@ video_frames_per_second = 25
 """
 ############## RUN VISUALIZATION
 """
+"""
 veh_trajectory_perf = generateSyntheticTrajectory(noise_pos=0, noise_angle=0, coverage=1)
 veh_trajectory_raw = generateSyntheticTrajectory(noise_pos=0.5, noise_angle=1/360*(2*np.pi), coverage=1)
 first_frame = veh_trajectory_raw["frame_nr"].iloc[0]
@@ -105,17 +106,6 @@ kalman_filtered_trajectory_perf_rts_obb = kalman_filtered_trajectory_perf_rts_ob
 kalman_filtered_trajectory_perf_rts_obb["vehicle"] = "VEHICLE_1"
 kalman_filtered_trajectory_perf_rts_obb = kalman_filtered_trajectory_perf_rts_obb.rename(columns={"x": "x_cartesian", "y": "y_cartesian"})
 processed_obb_perf = processTrajectory_synthetic(kalman_filtered_trajectory_perf_rts_obb) 
-
-"""
-import pickle
-vehicle_dynamics_path = "../data_benchmark/5_vehicle_information/vehicle_dynamics/"
-with open(vehicle_dynamics_path+"accel_capacity_interpolator.pkl", "rb") as f:
-    accel_max_spl = pickle.load(f)
-with open(vehicle_dynamics_path+"decel_capacity_interpolator.pkl", "rb") as f:
-    decel_min_spl = pickle.load(f)
-reconstr_hbb = reconstruct_trajectories_cvxopt(processed_hbb, accel_max_spl, decel_min_spl)
-reconstr_obb = reconstruct_trajectories_cvxopt(processed_obb, accel_max_spl, decel_min_spl)
-"""
 
 plt.figure(figsize=(12,6))
 
@@ -190,6 +180,7 @@ plt.show()
 
 print(processed_obb["Frame_ID"].is_monotonic_increasing)
 print(processed_obb["Lane_X"].is_monotonic_increasing)
+"""
 
 
 
@@ -244,7 +235,7 @@ with open(vehicle_dynamics_path+"accel_capacity_interpolator.pkl", "rb") as f:
 with open(vehicle_dynamics_path+"decel_capacity_interpolator.pkl", "rb") as f:
     decel_min_spl = pickle.load(f)
 
-coverage=1.0
+coverage=0.5
 for n in range(0,10):
     noise_angle = 1/360*(2*np.pi)
     for noise_pos in [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]:        

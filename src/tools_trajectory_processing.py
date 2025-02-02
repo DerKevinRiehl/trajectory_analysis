@@ -258,11 +258,31 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
         remaining_vehicles = remaining_vehicles - set([vehicles_proceeding_order[vehicle_id]])
         vehicle_id = vehicles_proceeding_order[vehicle_id]
         vehicle_df = prec_vehicle_df
+        
+    # Cut Left Tail in Lane_X
+    for vehicle_df in trajectory_df_list:
+        to_idx = int(len(vehicle_df)*cs.POST_FILTERING_KERNEL_A)
+        const_val = vehicle_df["x_lane"].iloc[to_idx]
+        if not vehicle_df["x_lane"].iloc[0] < const_val:
+            vehicle_df.iloc[0:to_idx+1, vehicle_df.columns.get_loc("x_lane")] = const_val
+    
+    # Cut Both Tails in velocity_cartesian
+    for vehicle_df in trajectory_df_list:
+        to_idx = int(len(vehicle_df)*cs.POST_FILTERING_KERNEL_A)
+        const_val = vehicle_df["velocity_cartesian"].iloc[to_idx]
+        vehicle_df.iloc[0:to_idx+1, vehicle_df.columns.get_loc("velocity_cartesian")] = const_val
+        to_idx = len(vehicle_df)-int(len(vehicle_df)*cs.POST_FILTERING_KERNEL_A)
+        const_val = vehicle_df["velocity_cartesian"].iloc[to_idx]
+        vehicle_df.iloc[to_idx+1:, vehicle_df.columns.get_loc("velocity_cartesian")] = const_val
+            
+    # Assembly Trajectory DF
     trajectory_df = pd.concat(trajectory_df_list).reset_index().drop(columns=["index", "level_0"])
     del vehicle_df, prec_vehicle_df, trajectory_df_list
 
     # Calculate Time Headway
     trajectory_df["time_headway"] = trajectory_df["space_headway"] / trajectory_df["velocity_cartesian"]
+    first_non_inf = trajectory_df["time_headway"].loc[~np.isinf(trajectory_df["time_headway"])].iloc[0]
+    trajectory_df["time_headway"] = trajectory_df["time_headway"].replace({np.inf: first_non_inf}, method='ffill')
 
     # Finalize Columns
     trajectory_df[["vehicleMeaningless","vehicleIndexNumber"]] = trajectory_df["vehicle"].str.split("_", n=1, expand=True)

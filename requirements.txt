@@ -4,3 +4,7 @@ cvxpy
 scipy
 mplcursors
 ecos
+numpy
+pandas
+matplotlib
+mosek
