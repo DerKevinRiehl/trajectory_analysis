@@ -39,33 +39,7 @@ import os
 # #############################################################################
 # CONSTANTS
 # #############################################################################
-RELEVANT_VIDEO = "DJI_0933.MOV"
 
-models = [
-    "Inference_cfa_r50_fpn_40e_dota_oc",
-    "Inference_faster-rcnn_r50_fpn_hbb_DOTA",
-    "Inference_oriented_rcnn_r50_fpn_fp16_1x_dota_le90",
-    "Inference_redet_re50_refpn_1x_dota_ms_rr_le90",
-    "Inference_retinanet_r50_fpn_hbb_DOTA",
-    "Inference_roi_trans_r50_fpn_1x_dota_ms_le90",
-    "Inference_rotated_retinanet_obb_r50_fpn_1x_dota_ms_rr_le90",
-    "Inference_s2anet_r50_fpn_fp16_1x_dota_le135",
-    "Inference_yolo_l_hbb",
-    "Inference_yolo_l_obb",
-    "Inference_yolo_m_hbb",
-    "Inference_yolo_m_obb",
-    "Inference_yolo_n_hbb",
-    "Inference_yolo_n_obb",
-    "Inference_yolo_s_hbb",
-    "Inference_yolo_s_obb",
-    "Inference_yolo_x_hbb",
-    "Inference_yolo_x_obb",
-]
-
-RELEVANT_MODEL = models[0]
-RELEVANT_MODEL = models[17]
-
-RELEVANT_MODEL = models[0]
 
 
 
@@ -73,15 +47,7 @@ RELEVANT_MODEL = models[0]
 # #############################################################################
 # LOADING - FILES
 # #############################################################################
-# VIDEO
-video_file_path = video_path+RELEVANT_VIDEO
-num_frames =  getNumberOfFramesFromVideo(video_file_path)
-# ANNOTATIONS
-annotations = loadAnnotations("../data_benchmark/1_annotations/"+RELEVANT_MODEL+".zip")
-# HOMOGRAPHY
-df_homography = loadHomography("../data_benchmark/1_homography/"+RELEVANT_VIDEO+"_circle.txt")
-# REGION OF INTEREST
-region_of_interest = REGION_OF_INTEREST[RELEVANT_VIDEO]
+
 # FRAME RATE
 VIDEO_FRAME_RATE = 25
 

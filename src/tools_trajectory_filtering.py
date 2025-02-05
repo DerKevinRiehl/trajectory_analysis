@@ -70,6 +70,7 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
     vehicle_id = last_vehicle
     prec_vehicle_df = None
     prec_vehicle_length = None
+
     while len(remaining_vehicles) > 0:
         print(f"Now handling {vehicle_id} with {len(remaining_vehicles)} remaining vehicles.")
         vehicle_df = trajectory_df[trajectory_df["Vehicle_ID"] == vehicle_id].copy()
@@ -81,8 +82,8 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
         if not vehicle_df["Lane_X"].is_monotonic_increasing:
             res = isotonic_regression(vehicle_df["Lane_X"].to_numpy(), increasing=True)
             vehicle_df["Lane_X"] = res.x
-            vehicle_df["v_Vel"] = vehicle_df["Lane_X"].diff(1).shift(-1).fillna(0) * FILTERING_SAMPLING_FREQUENCY
-            vehicle_df["v_Accel"] = vehicle_df["v_Vel"].diff(1).shift(-1).fillna(0) * FILTERING_SAMPLING_FREQUENCY
+        vehicle_df["v_Vel"] = vehicle_df["Lane_X"].diff(1).shift(-1).fillna(0) * FILTERING_SAMPLING_FREQUENCY
+        vehicle_df["v_Accel"] = vehicle_df["v_Vel"].diff(1).shift(-1).fillna(0) * FILTERING_SAMPLING_FREQUENCY
 
         # Handle noise in velocity and acceleration through the optimization procedure
         if vehicle_id != last_vehicle:
@@ -92,6 +93,9 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
         speed = np.diff(position, n=1) * FILTERING_SAMPLING_FREQUENCY
         accel = np.diff(speed, n=1) * FILTERING_SAMPLING_FREQUENCY
 
+
+        # np.savetxt("output_accel.txt", accel, delimiter="\t")
+                
         w_recon = int(recon_window*FILTERING_SAMPLING_FREQUENCY)
         step = int(recon_step*FILTERING_SAMPLING_FREQUENCY)
 
@@ -104,14 +108,15 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
         for k in range(0, len(speed), step):
             x_noised= position_recon[k:k+w_recon+1]
             v_noised = speed_recon[k:k+w_recon]
-
             v_filtered = speed_filtered[k:k+w_recon]
+            
+            # np.savetxt("output_v_noised.txt", v_noised, delimiter="\t")
+            # np.savetxt("output_v_filtered.txt", v_filtered, delimiter="\t")
+            
             a_max = max(accel_max_spl(v_noised[0]), accel_max_spl(np.mean(v_filtered)))
             a_driver_max = 0.5 * a_max
             a_min = max(decel_min_spl(v_noised[0]), decel_min_spl(np.mean(v_filtered)))
 
-            # v_scale = np.max(np.abs(v_filtered))
-            # v_recon = cp.Variable(shape=(len(v_noised),)) * v_scale
             v_recon = cp.Variable(shape=(len(v_noised),))
             a_recon = cp.diff(v_recon, k=1) * FILTERING_SAMPLING_FREQUENCY
             lam_soft_cnst = 0.05
@@ -124,23 +129,28 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
             ]
             if vehicle_id != last_vehicle:
                 x_lead = lead_position[k:k+w_recon+1]
+                const_array = x_lead - prec_vehicle_length - x_noised
+                const_array2 = x_lead - prec_vehicle_length - np.cumsum(np.hstack([x_noised[0], v_filtered/FILTERING_SAMPLING_FREQUENCY]))
+                
+                # np.savetxt("output_x_lead.txt", x_lead, delimiter="\t")
+                # np.savetxt("output_x_noised.txt", x_noised, delimiter="\t")
+                # np.savetxt("output_const_array.txt", const_array, delimiter="\t")
+                # np.savetxt("output_const_array2.txt", const_array2, delimiter="\t")
+            
                 for t in range(len(v_noised)):
                     cnst += [
                         x_lead[t+1] - prec_vehicle_length - (x_noised[0] + cp.sum(v_recon[:t])/FILTERING_SAMPLING_FREQUENCY) >= 1.0
                     ]
-            try: # try with default solver "CLARABEL"
-                mosek_params = {
-                    'MSK_DPAR_INTPNT_CO_TOL_REL_GAP': 1e-6,  # Tolerance for relative gap
-                    # 'MSK_DPAR_OPTIMIZER_MAX_TIME': 100.0,    # Set a time limit
-                    'MSK_IPAR_INTPNT_SOLVE_FORM': 'MSK_SOLVE_DUAL'  # Solve dual explicitly
-                }
+            try: # try with default solver "MOSEK"
+                # mosek_params = {
+                #     'MSK_DPAR_INTPNT_CO_TOL_REL_GAP': 1e-6,  # Tolerance for relative gap
+                #     # 'MSK_DPAR_OPTIMIZER_MAX_TIME': 100.0,    # Set a time limit
+                #     'MSK_IPAR_INTPNT_SOLVE_FORM': 'MSK_SOLVE_DUAL'  # Solve dual explicitly
+                # }
                 prob = cp.Problem(cp.Minimize(obj), cnst)            
-                prob.solve(solver=cp.MOSEK, mosek_params=mosek_params, verbose=False)
-            except: # use ECOS alternatively
-                # try:
-                #     prob = cp.Problem(cp.Minimize(obj), cnst)          
-                #     prob.solve(solver=cp.ECOS, verbose=False)
-                # except:
+                # prob.solve(solver=cp.MOSEK, mosek_params=mosek_params, verbose=True)
+                prob.solve(solver=cp.MOSEK, verbose=True)
+            except: # use SCS alternatively
                 prob = cp.Problem(cp.Minimize(obj), cnst)          
                 prob.solve(solver=cp.SCS, verbose=False)
             try:
@@ -148,6 +158,13 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
                 accel_recon[k:k+w_recon-1] = a_recon.value
                 position_recon[k:k+w_recon+1] = np.cumsum(np.hstack([x_noised[0], v_recon.value/FILTERING_SAMPLING_FREQUENCY]))
             except:
+                print(x_noised[0])
+                print(len(v_noised))
+                print(v_recon)
+                print(v_recon.shape)
+                print(v_recon.value)
+                print(a_min)
+                print(a_max)
                 print(v_recon.value)
                 print(k, k+w_recon)
                 print(v_noised.shape)

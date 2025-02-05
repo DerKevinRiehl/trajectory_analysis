@@ -211,24 +211,6 @@ def _determineTrajectoryFusionWeights(df):
     df["weight_backward"] = weights_backward
     return df
 
-def _final_robustness_filtering(kalman_filtered_trajectory_rts):
-    kernel_size_k = int(len(kalman_filtered_trajectory_rts)*cs.POST_FILTERING_KERNEL_A)
-    if kernel_size_k%2==0:
-        kernel_size_k += 1
-    kernel_size_k2 = int(kernel_size_k/10)
-    if kernel_size_k2%2==0:
-        kernel_size_k2 += 1
-    for col in ["x", "y", "state1", "state2", "state3", "state4", "state5"]:
-        kalman_filtered_trajectory_rts[col] = (kalman_filtered_trajectory_rts[col+"_x"]*kalman_filtered_trajectory_rts["weight_forward_final"]+kalman_filtered_trajectory_rts[col+"_y"]*kalman_filtered_trajectory_rts["weight_backward_final"])
-        kalman_filtered_trajectory_rts[col] = kalman_filtered_trajectory_rts[col].rolling(window=cs.POST_FILTERING_KERNEL_B, center=True, min_periods=1).mean()
-        if col in["x", "y", "state1", "state2", "state3"]:
-            kernel_size = kernel_size_k
-        else:
-            kernel_size = kernel_size_k2
-        kalman_filtered_trajectory_rts[col] = kalman_filtered_trajectory_rts[col].rolling(window=kernel_size, center=True, min_periods=1).median()
-        kalman_filtered_trajectory_rts[col] = kalman_filtered_trajectory_rts[col].rolling(window=kernel_size, center=True, min_periods=1).mean()
-    return kalman_filtered_trajectory_rts
-        
 def calculateKalmanFilteredTrajectory(veh_trajectory_raw: pd.DataFrame, Q_k: np.array, R_k: np.array, first_frame: int, last_frame: int, video_frames_per_second: int, obb=False):
     """
     This method calculates the Kalman filtered vehicle trajectory.
@@ -265,7 +247,9 @@ def calculateKalmanFilteredTrajectory(veh_trajectory_raw: pd.DataFrame, Q_k: np.
     kalman_filtered_trajectory_rts["weight_sum"] = kalman_filtered_trajectory_rts[["weight_forward", "weight_backward"]].sum(axis=1)
     kalman_filtered_trajectory_rts["weight_forward_final"] = (kalman_filtered_trajectory_rts["weight_sum"]-kalman_filtered_trajectory_rts["weight_forward"])/kalman_filtered_trajectory_rts["weight_sum"]
     kalman_filtered_trajectory_rts["weight_backward_final"] = (kalman_filtered_trajectory_rts["weight_sum"]-kalman_filtered_trajectory_rts["weight_backward"])/kalman_filtered_trajectory_rts["weight_sum"]
-    kalman_filtered_trajectory_rts = _final_robustness_filtering(kalman_filtered_trajectory_rts)
+    for col in ["x", "y", "state1", "state2", "state3", "state4", "state5"]:
+            kalman_filtered_trajectory_rts[col] = (kalman_filtered_trajectory_rts[col+"_x"]*kalman_filtered_trajectory_rts["weight_forward_final"]+kalman_filtered_trajectory_rts[col+"_y"]*kalman_filtered_trajectory_rts["weight_backward_final"])
+            kalman_filtered_trajectory_rts[col] = kalman_filtered_trajectory_rts[col].rolling(window=cs.POST_FILTERING_KERNEL_B, center=True, min_periods=1).mean()
     kalman_filtered_trajectory_rts = kalman_filtered_trajectory_rts[["frame_nr", "time", "measurement_available", "x", "y", "state1", "state2", "state3", "state4", "state5"]]
     return kalman_filtered_trajectory_rts
 

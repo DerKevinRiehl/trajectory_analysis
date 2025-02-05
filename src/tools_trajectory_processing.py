@@ -18,6 +18,7 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 import numpy as np
 import _constants as cs
+from scipy.optimize import isotonic_regression
 
 # #############################################################################
 # METHODS
@@ -155,9 +156,62 @@ def _correctZeroDiffsRepeatedly(vals):
     return vals
 
 
+def _filter_median_deviation(series, kernel_size, threshold):
+    rolling_median = series.rolling(window=kernel_size, center=True, min_periods=1).median()
+    deviation = np.abs(series - rolling_median)
+    mask = deviation > threshold
+    # Calculate weights
+    weight_series = 1 / (np.maximum(deviation - threshold, 0) + 1)
+    weight_median = 1 - weight_series
+    # Apply weighted average where deviation > threshold
+    filtered = pd.Series(index=series.index)
+    filtered[mask] = (series[mask] * weight_series[mask] + 
+                      rolling_median[mask] * weight_median[mask])
+    filtered[~mask] = series[~mask]
+    return filtered
+
+
+def _filterKalmanStates(trajectory_df):
+    vehicles = trajectory_df["vehicle"].unique()
+    filtered_trajectory_df = pd.DataFrame()
+    for vehicle in vehicles:
+        vehicle_df = trajectory_df[trajectory_df["vehicle"]==vehicle]
+        # CARTESIAN COORDINATES
+        # State 1&2 (x&y)
+        vehicle_df["state1"] = vehicle_df["state1"].clip(upper=cs.PROCESSING_MAX_POSITION, lower=cs.PROCESSING_MIN_POSITION)
+        vehicle_df["state2"] = vehicle_df["state2"].clip(upper=cs.PROCESSING_MAX_POSITION, lower=cs.PROCESSING_MIN_POSITION)
+        # Velocity Outlier Correction
+        vehicle_df["state1"] = _filter_median_deviation(vehicle_df["state1"], kernel_size=cs.PROCESSING_CARTESIAN_OUTLIER, threshold=cs.PROCESSING_CARTESIAN_THRESHOLD)
+        vehicle_df["state2"] = _filter_median_deviation(vehicle_df["state2"], kernel_size=cs.PROCESSING_CARTESIAN_OUTLIER, threshold=cs.PROCESSING_CARTESIAN_THRESHOLD)
+        # Cartesian MovingAverage Filter
+        vehicle_df["state1"] = vehicle_df["state1"].rolling(window=int(cs.FILTERING_SAMPLING_FREQUENCY/5), center=True, min_periods=1).mean()
+        vehicle_df["state2"] = vehicle_df["state2"].rolling(window=int(cs.FILTERING_SAMPLING_FREQUENCY/5), center=True, min_periods=1).mean()
+        # ANGLE (State 3)
+        # vehicle_df["state3"] = vehicle_df["state3"].rolling(window=int(cs.FILTERING_SAMPLING_FREQUENCY*4), center=True, min_periods=1).mean()
+        
+        # MERGE TO COMPLETE DATAFRAME
+        filtered_trajectory_df = pd.concat([filtered_trajectory_df, vehicle_df], ignore_index=True)
+    return filtered_trajectory_df
+
+
+def _filterVelocity(vehicle_df):
+    # VELOCITY (State 4)
+    # Velocity MAX Capping
+    vehicle_df["velocity_cartesian"] = vehicle_df["velocity_cartesian"].clip(upper=cs.PROCESSING_MAX_VELOCITY)
+    # Velocity Outlier Correction
+    vehicle_df["velocity_cartesian"] = _filter_median_deviation(vehicle_df["velocity_cartesian"], kernel_size=int(len(vehicle_df)*cs.POST_FILTERING_KERNEL_A), threshold=cs.PROCESSING_THR_VELOCITY)
+    # Velocity Tail Correction
+    to_idx = int(len(vehicle_df)*cs.POST_FILTERING_KERNEL_A)
+    const_val = vehicle_df["velocity_cartesian"].iloc[to_idx]
+    vehicle_df.iloc[0:to_idx+1, vehicle_df.columns.get_loc("velocity_cartesian")] = const_val
+    to_idx = len(vehicle_df)-int(len(vehicle_df)*cs.POST_FILTERING_KERNEL_A)
+    const_val = vehicle_df["velocity_cartesian"].iloc[to_idx]
+    vehicle_df.iloc[to_idx+1:, vehicle_df.columns.get_loc("velocity_cartesian")] = const_val
+    return vehicle_df
+
+
 def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str, 
-                      vehicle_proceeding_order_file_path: str, trajectory_type: str, 
-                      first_vehicle: str):
+                      vehicle_proceeding_order_file_path: str, trajectory_type: str):
     """
     This method loads the Kalman filtered trajectories from all vehicles in a given video.
 
@@ -171,9 +225,6 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
         The path to the file that defines the vehicle proceeding_order.
     trajectory_type: str
         The trajectory type. Options: "obb", "hbb".
-    first_vehicle: str
-        The first vehicle (reference vehicle), that starts at lane position 0 at time 0.
-        All other lane coordinates are in reference to this first vehicle's position at time 0.
         
     Returns
     -------
@@ -192,6 +243,9 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
     # Determine Proceeding Vehicle
     vehicles_proceeding_order = json.load(open(vehicle_proceeding_order_file_path, "r"))
     trajectory_df["proceeding_vehicle"] = trajectory_df["vehicle"].map(vehicles_proceeding_order)
+
+    # Filter Kalman States
+    trajectory_df = _filterKalmanStates(trajectory_df)
 
     # Calculate Polar Coordinates
     trajectory_df["x_polar"] = np.arctan2(-trajectory_df["state2"], trajectory_df["state1"])
@@ -220,18 +274,27 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
         vehicle_df.loc[vehicle_df["angle_headway"] < 0, "angle_headway"] += 2*np.pi
         vehicle_df["space_headway_linear"] = np.sqrt((vehicle_df["state1"] - prec_vehicle_df["state1"])**2 + (vehicle_df["state2"] - prec_vehicle_df["state2"])**2)
         vehicle_df["space_headway"] = vehicle_df["space_headway_linear"] * vehicle_df["angle_headway"] / np.sqrt(2*(1-np.cos(vehicle_df["angle_headway"])))
+        # filtering space_headways
+        vehicle_df["space_headway"] = vehicle_df["space_headway"].clip(upper=30, lower=0)
+        vehicle_df["space_headway"] = vehicle_df["space_headway"].rolling(window=50, center=True, min_periods=1).median()
         vehicle_df["y_lane"] = vehicle_df["y_polar"]
         if vehicle_id == first_vehicle:
             vehicle_df["x_lane"] = vehicle_df["x_polar"]*vehicle_df["y_polar"]
             vehicle_df["x_lane"] = _integrate_lane_progress(vehicle_df["x_lane"])
             vehicle_df["x_lane"] = _correctZeroDiffsRepeatedly(vehicle_df["x_lane"])
             vehicle_df["x_lane"] = vehicle_df["x_lane"] + vehicle_df["offset"]
+            # filtering first vehicle's lane coordinate
+            derivative = vehicle_df["x_lane"].diff()
+            derivative = derivative.clip(upper=cs.PROCESSING_MAX_VELOCITY/cs.FILTERING_SAMPLING_FREQUENCY, lower=0)
+            derivative = derivative.rolling(window=int(cs.FILTERING_SAMPLING_FREQUENCY), center=True, min_periods=1).mean()
+            vehicle_df["x_lane"] = derivative.cumsum() + vehicle_df["offset"]
         else:
             vehicle_df["x_lane"] = pd.NA
         sampling_interval = vehicle_df["time"].diff(1).mean()
         vehicle_df["velocity_x"] = vehicle_df["state1"].diff(1).shift(1).fillna(0) / sampling_interval
         vehicle_df["velocity_y"] = vehicle_df["state2"].diff(1).shift(1).fillna(0) / sampling_interval
         vehicle_df["velocity_cartesian"] = np.sqrt(np.square(vehicle_df["velocity_x"]) + np.square(vehicle_df["velocity_y"]))
+        vehicle_df = _filterVelocity(vehicle_df)
         vehicle_df = vehicle_df[["frame_nr", "vehicle", "x_lane", "y_lane", "space_headway", "velocity_cartesian"]]
         if lane_coordinate_df is None:
             lane_coordinate_df = vehicle_df.copy()
@@ -254,27 +317,22 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
             prec_vehicle_df = prec_vehicle_df.sort_values(by="frame_nr", ascending=True)
         prec_vehicle_df = prec_vehicle_df.reset_index()
         prec_vehicle_df["x_lane"] = vehicle_df["x_lane"] + vehicle_df["space_headway"]
+        # Isotonic regression of x_lane
+        regr = isotonic_regression(prec_vehicle_df["x_lane"].to_numpy(), increasing=True).x
+        regr = regr - (regr[0] - prec_vehicle_df["x_lane"].iloc[0])
+        prec_vehicle_df["x_lane"] = regr
+        prec_vehicle_df["x_lane"] = prec_vehicle_df["x_lane"].rolling(window=int(cs.FILTERING_SAMPLING_FREQUENCY/2), min_periods=1).mean()        
+        # Filter Space_Headway
+        filtered_headway = np.maximum(cs.PROCESSING_MIN_HEADWAY_DIST, prec_vehicle_df["x_lane"] - vehicle_df["x_lane"])                
+        # Final Lane Coordinates
+        prec_vehicle_df["x_lane"] = vehicle_df["x_lane"] + filtered_headway
+        vehicle_df["space_headway"] = prec_vehicle_df["x_lane"] - vehicle_df["x_lane"]
+        # Store results
         trajectory_df_list.append(prec_vehicle_df)
         remaining_vehicles = remaining_vehicles - set([vehicles_proceeding_order[vehicle_id]])
         vehicle_id = vehicles_proceeding_order[vehicle_id]
         vehicle_df = prec_vehicle_df
         
-    # Cut Left Tail in Lane_X
-    for vehicle_df in trajectory_df_list:
-        to_idx = int(len(vehicle_df)*cs.POST_FILTERING_KERNEL_A)
-        const_val = vehicle_df["x_lane"].iloc[to_idx]
-        if not vehicle_df["x_lane"].iloc[0] < const_val:
-            vehicle_df.iloc[0:to_idx+1, vehicle_df.columns.get_loc("x_lane")] = const_val
-    
-    # Cut Both Tails in velocity_cartesian
-    for vehicle_df in trajectory_df_list:
-        to_idx = int(len(vehicle_df)*cs.POST_FILTERING_KERNEL_A)
-        const_val = vehicle_df["velocity_cartesian"].iloc[to_idx]
-        vehicle_df.iloc[0:to_idx+1, vehicle_df.columns.get_loc("velocity_cartesian")] = const_val
-        to_idx = len(vehicle_df)-int(len(vehicle_df)*cs.POST_FILTERING_KERNEL_A)
-        const_val = vehicle_df["velocity_cartesian"].iloc[to_idx]
-        vehicle_df.iloc[to_idx+1:, vehicle_df.columns.get_loc("velocity_cartesian")] = const_val
-            
     # Assembly Trajectory DF
     trajectory_df = pd.concat(trajectory_df_list).reset_index().drop(columns=["index", "level_0"])
     del vehicle_df, prec_vehicle_df, trajectory_df_list
