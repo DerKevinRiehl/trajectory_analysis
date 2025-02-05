@@ -188,7 +188,6 @@ def _filterKalmanStates(trajectory_df):
         vehicle_df["state2"] = vehicle_df["state2"].rolling(window=int(cs.FILTERING_SAMPLING_FREQUENCY/5), center=True, min_periods=1).mean()
         # ANGLE (State 3)
         # vehicle_df["state3"] = vehicle_df["state3"].rolling(window=int(cs.FILTERING_SAMPLING_FREQUENCY*4), center=True, min_periods=1).mean()
-        
         # MERGE TO COMPLETE DATAFRAME
         filtered_trajectory_df = pd.concat([filtered_trajectory_df, vehicle_df], ignore_index=True)
     return filtered_trajectory_df
@@ -210,7 +209,7 @@ def _filterVelocity(vehicle_df):
     return vehicle_df
 
 
-def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str, 
+def processTrajectory_clean(video_trajectory_path: str, vehiclized_file_path: str, 
                       vehicle_proceeding_order_file_path: str, trajectory_type: str):
     """
     This method loads the Kalman filtered trajectories from all vehicles in a given video.
@@ -274,20 +273,12 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
         vehicle_df.loc[vehicle_df["angle_headway"] < 0, "angle_headway"] += 2*np.pi
         vehicle_df["space_headway_linear"] = np.sqrt((vehicle_df["state1"] - prec_vehicle_df["state1"])**2 + (vehicle_df["state2"] - prec_vehicle_df["state2"])**2)
         vehicle_df["space_headway"] = vehicle_df["space_headway_linear"] * vehicle_df["angle_headway"] / np.sqrt(2*(1-np.cos(vehicle_df["angle_headway"])))
-        # filtering space_headways
-        vehicle_df["space_headway"] = vehicle_df["space_headway"].clip(upper=30, lower=0)
-        vehicle_df["space_headway"] = vehicle_df["space_headway"].rolling(window=50, center=True, min_periods=1).median()
         vehicle_df["y_lane"] = vehicle_df["y_polar"]
         if vehicle_id == first_vehicle:
             vehicle_df["x_lane"] = vehicle_df["x_polar"]*vehicle_df["y_polar"]
             vehicle_df["x_lane"] = _integrate_lane_progress(vehicle_df["x_lane"])
             vehicle_df["x_lane"] = _correctZeroDiffsRepeatedly(vehicle_df["x_lane"])
             vehicle_df["x_lane"] = vehicle_df["x_lane"] + vehicle_df["offset"]
-            # filtering first vehicle's lane coordinate
-            derivative = vehicle_df["x_lane"].diff()
-            derivative = derivative.clip(upper=cs.PROCESSING_MAX_VELOCITY/cs.FILTERING_SAMPLING_FREQUENCY, lower=0)
-            derivative = derivative.rolling(window=int(cs.FILTERING_SAMPLING_FREQUENCY), center=True, min_periods=1).mean()
-            vehicle_df["x_lane"] = derivative.cumsum() + vehicle_df["offset"]
         else:
             vehicle_df["x_lane"] = pd.NA
         sampling_interval = vehicle_df["time"].diff(1).mean()
@@ -316,17 +307,13 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
         if not prec_vehicle_df["frame_nr"].is_monotonic_increasing:
             prec_vehicle_df = prec_vehicle_df.sort_values(by="frame_nr", ascending=True)
         prec_vehicle_df = prec_vehicle_df.reset_index()
+        # prec_vehicle_df["x_lane"] = vehicle_df["x_lane"] + vehicle_df["space_headway"]
+        # vehicle_df["space_headway"] = prec_vehicle_df["x_lane"] - vehicle_df["x_lane"]
+        # Clipping Space Headway ?
+        filtered_headway = vehicle_df["space_headway"].copy()
+        filtered_headway = filtered_headway.clip(lower=cs.PROCESSING_MIN_HEADWAY_DIST)
+        vehicle_df["space_headway"] = filtered_headway
         prec_vehicle_df["x_lane"] = vehicle_df["x_lane"] + vehicle_df["space_headway"]
-        # Isotonic regression of x_lane
-        regr = isotonic_regression(prec_vehicle_df["x_lane"].to_numpy(), increasing=True).x
-        regr = regr - (regr[0] - prec_vehicle_df["x_lane"].iloc[0])
-        prec_vehicle_df["x_lane"] = regr
-        prec_vehicle_df["x_lane"] = prec_vehicle_df["x_lane"].rolling(window=int(cs.FILTERING_SAMPLING_FREQUENCY/2), min_periods=1).mean()        
-        # Filter Space_Headway
-        filtered_headway = np.maximum(cs.PROCESSING_MIN_HEADWAY_DIST, prec_vehicle_df["x_lane"] - vehicle_df["x_lane"])                
-        # Final Lane Coordinates
-        prec_vehicle_df["x_lane"] = vehicle_df["x_lane"] + filtered_headway
-        vehicle_df["space_headway"] = prec_vehicle_df["x_lane"] - vehicle_df["x_lane"]
         # Store results
         trajectory_df_list.append(prec_vehicle_df)
         remaining_vehicles = remaining_vehicles - set([vehicles_proceeding_order[vehicle_id]])
@@ -386,6 +373,7 @@ def processTrajectory(video_trajectory_path: str, vehiclized_file_path: str,
             "Time_Hdwy"
         ]]
     return trajectory_df
+
 
 def processTrajectory_synthetic(trajectory_df):
     """

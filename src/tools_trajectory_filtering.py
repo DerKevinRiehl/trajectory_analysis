@@ -71,6 +71,8 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
     prec_vehicle_df = None
     prec_vehicle_length = None
 
+    relax_1_records = []
+    relax_2_records = []
     while len(remaining_vehicles) > 0:
         print(f"Now handling {vehicle_id} with {len(remaining_vehicles)} remaining vehicles.")
         vehicle_df = trajectory_df[trajectory_df["Vehicle_ID"] == vehicle_id].copy()
@@ -89,13 +91,9 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
         if vehicle_id != last_vehicle:
             lead_position = prec_vehicle_df["Lane_X"].to_numpy()
         position = vehicle_df["Lane_X"].to_numpy()
-        # speed = vehicle_df["v_Vel"].to_numpy()
         speed = np.diff(position, n=1) * FILTERING_SAMPLING_FREQUENCY
-        accel = np.diff(speed, n=1) * FILTERING_SAMPLING_FREQUENCY
-
-
-        # np.savetxt("output_accel.txt", accel, delimiter="\t")
-                
+        speed = np.maximum(0, speed)
+        accel = np.diff(speed, n=1) * FILTERING_SAMPLING_FREQUENCY               
         w_recon = int(recon_window*FILTERING_SAMPLING_FREQUENCY)
         step = int(recon_step*FILTERING_SAMPLING_FREQUENCY)
 
@@ -110,51 +108,39 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
             v_noised = speed_recon[k:k+w_recon]
             v_filtered = speed_filtered[k:k+w_recon]
             
-            # np.savetxt("output_v_noised.txt", v_noised, delimiter="\t")
-            # np.savetxt("output_v_filtered.txt", v_filtered, delimiter="\t")
-            
             a_max = max(accel_max_spl(v_noised[0]), accel_max_spl(np.mean(v_filtered)))
             a_driver_max = 0.5 * a_max
             a_min = max(decel_min_spl(v_noised[0]), decel_min_spl(np.mean(v_filtered)))
 
             v_recon = cp.Variable(shape=(len(v_noised),))
+            relax_1 = cp.Variable()
+            relax_2 = cp.Variable()
+            
             a_recon = cp.diff(v_recon, k=1) * FILTERING_SAMPLING_FREQUENCY
             lam_soft_cnst = 0.05
-            obj = cp.norm(v_recon - v_filtered, 2)**2 + cp.std(a_recon)**2 + cp.sum(lam_soft_cnst * (a_recon/a_driver_max - 1))
+            obj = cp.norm(v_recon - v_filtered, 2)**2 + cp.std(a_recon)**2 + cp.sum(lam_soft_cnst * (a_recon/a_driver_max - 1)) + relax_1**2 + relax_2**2
             cnst = [
                 v_recon >= 0,
                 cp.sum(v_recon)/FILTERING_SAMPLING_FREQUENCY == x_noised[-1] - x_noised[0],
-                a_recon >= a_min,
-                a_recon <= a_max
+                a_recon - a_min >= relax_1,
+                a_recon - a_max <= relax_2,
+                relax_1 <= 0,
+                relax_2 >= 0
             ]
             if vehicle_id != last_vehicle:
                 x_lead = lead_position[k:k+w_recon+1]
-                const_array = x_lead - prec_vehicle_length - x_noised
-                const_array2 = x_lead - prec_vehicle_length - np.cumsum(np.hstack([x_noised[0], v_filtered/FILTERING_SAMPLING_FREQUENCY]))
-                
-                # np.savetxt("output_x_lead.txt", x_lead, delimiter="\t")
-                # np.savetxt("output_x_noised.txt", x_noised, delimiter="\t")
-                # np.savetxt("output_const_array.txt", const_array, delimiter="\t")
-                # np.savetxt("output_const_array2.txt", const_array2, delimiter="\t")
-            
                 for t in range(len(v_noised)):
                     cnst += [
                         x_lead[t+1] - prec_vehicle_length - (x_noised[0] + cp.sum(v_recon[:t])/FILTERING_SAMPLING_FREQUENCY) >= 1.0
                     ]
             try: # try with default solver "MOSEK"
-                # mosek_params = {
-                #     'MSK_DPAR_INTPNT_CO_TOL_REL_GAP': 1e-6,  # Tolerance for relative gap
-                #     # 'MSK_DPAR_OPTIMIZER_MAX_TIME': 100.0,    # Set a time limit
-                #     'MSK_IPAR_INTPNT_SOLVE_FORM': 'MSK_SOLVE_DUAL'  # Solve dual explicitly
-                # }
                 prob = cp.Problem(cp.Minimize(obj), cnst)            
-                # prob.solve(solver=cp.MOSEK, mosek_params=mosek_params, verbose=True)
-                prob.solve(solver=cp.MOSEK, verbose=True)
+                prob.solve(solver=cp.MOSEK, verbose=False)
             except: # use SCS alternatively
                 prob = cp.Problem(cp.Minimize(obj), cnst)          
                 prob.solve(solver=cp.SCS, verbose=False)
             try:
-                speed_recon[k:k+w_recon] = v_recon.value
+                speed_recon[k:k+w_recon] = np.maximum(0, v_recon.value)
                 accel_recon[k:k+w_recon-1] = a_recon.value
                 position_recon[k:k+w_recon+1] = np.cumsum(np.hstack([x_noised[0], v_recon.value/FILTERING_SAMPLING_FREQUENCY]))
             except:
@@ -169,7 +155,8 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
                 print(k, k+w_recon)
                 print(v_noised.shape)
                 sys.exit(1)
-        
+            relax_1_records.append(relax_1.value)
+            relax_2_records.append(relax_2.value)
         vehicle_df["Lane_X"] = position_recon
         vehicle_df["v_Vel"] = np.hstack((speed_recon, 0))
         vehicle_df["v_Accel"] = np.hstack((accel_recon, [0, 0]))
@@ -184,7 +171,6 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
         del subdf
         remaining_vehicles = remaining_vehicles - set([vehicle_id])
         vehicle_id = follower_id
-        #prec_vehicle_id = vehicle_id
         prec_vehicle_df = vehicle_df
         prec_vehicle_length = prec_vehicle_df["v_Length"].mean()
 
@@ -192,7 +178,7 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
     reconstructed_trajectory_df = reconstructed_trajectory_df.reset_index().drop(columns=["index"])
     if trajectory_df["Vehicle_ID"].nunique() > 1:
         reconstructed_trajectory_df = _recompute_headways(reconstructed_trajectory_df)
-    return reconstructed_trajectory_df
+    return reconstructed_trajectory_df, np.min(relax_1_records), np.max(relax_2_records)
 
 
 # #############################################################################

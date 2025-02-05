@@ -25,7 +25,7 @@ from tools_video import renderAnnotatedVideo
 from tools_trajectorization import generateTrajectories, determineUniqueTrajectoryLabels
 from tools_trajectorization import generateEmptyTrajectoryLabelVehicleMap, loadTrajectoryLabelVehicleMap
 from tools_filtering import calculateKalmanFilteredTrajectory, alignTrajectories, featureCalculation
-from tools_trajectory_processing import processTrajectory
+from tools_trajectory_processing import processTrajectory_clean
 from tools_trajectory_filtering import reconstruct_trajectories_cvxopt
 import numpy as np
 import pickle
@@ -62,17 +62,14 @@ models = [
     "Inference_yolo_x_obb",
 ]
 
+# SET A MODEL TO ANALYSE
+# RELEVANT_MODEL = models[0]
+# RELEVANT_MODEL = models[17]
+
 RELEVANT_MODEL = models[0]
-RELEVANT_MODEL = models[17]
-
-RELEVANT_MODEL = models[16]
+print(RELEVANT_MODEL)
 
 
-# 'Inference_yolo_x_hbb'
-# 'Inference_yolo_s_hbb'
-# 'Inference_yolo_n_obb'
-# 'Inference_yolo_m_hbb'
-# 'Inference_yolo_l_obb'
 
 # #############################################################################
 # LOADING - FILES
@@ -89,7 +86,7 @@ region_of_interest = REGION_OF_INTEREST[RELEVANT_VIDEO]
 
 
 
-"""
+# """
 # #############################################################################
 # STEP 1: SINGLE FRAME PROCESSING
 # #############################################################################
@@ -103,12 +100,12 @@ for frame_counter in range(0, num_frames):
     processed_annotations[frame_counter] = processed_frame_annotations
     processed_annotations_pix[frame_counter] = transformAnnotations_CARTESIAN_2_PIX(processed_frame_annotations, frame_homography)
 saveAnnotations("../data_benchmark/2_frame_processed/"+RELEVANT_MODEL+".txt", processed_annotations)
-"""
+# """
 
 
 
 
-"""
+# """
 # #############################################################################
 # STEP 2: TRAJECTORY GENERATION
 # #############################################################################
@@ -124,11 +121,11 @@ generateEmptyTrajectoryLabelVehicleMap(map_file, unique_trajectory_labels)
 # trajectory_vehicle_map = loadTrajectoryLabelVehicleMap(map_file)
 # see 3_B_trajectorized_mapping/mapper/automatic_mapping.py
 # see 3_C_vehiclized/labeller/automatic_labeller.py
-"""
+# """
 
 
 
-"""
+# """
 # #############################################################################
 # STEP 3: EXTENDED KALMAN FILTERING
 # #############################################################################
@@ -175,7 +172,7 @@ for selected_vehicle in ["VEHICLE_14"]:
     kalman_filtered_trajectory_rts_hbb.to_csv(target_output_folder+selected_vehicle+"_hbb.csv",index=False)
     if obb_mode:
         kalman_filtered_trajectory_rts_obb.to_csv(target_output_folder+selected_vehicle+"_obb.csv",index=False)
-"""
+# """
 
 
 
@@ -191,99 +188,16 @@ vehicle_proceeding_order_file_path = "../data_benchmark/5_vehicle_information/pr
 
 target_output_file = "../data_benchmark/6_final_trajectories/"+RELEVANT_MODEL+"_HBB.txt"
 trajectory_type = "hbb"
-final_trajectory_df = processTrajectory(video_trajectory_path, vehiclized_file_path, 
+final_trajectory_df = processTrajectory_clean(video_trajectory_path, vehiclized_file_path, 
                   vehicle_proceeding_order_file_path, trajectory_type)
 final_trajectory_df.to_csv(target_output_file, index=False)
 
 target_output_file = "../data_benchmark/6_final_trajectories/"+RELEVANT_MODEL+"_OBB.txt"
 trajectory_type = "obb"
-final_trajectory_df = processTrajectory(video_trajectory_path, vehiclized_file_path, 
+final_trajectory_df = processTrajectory_clean(video_trajectory_path, vehiclized_file_path, 
                   vehicle_proceeding_order_file_path, trajectory_type)
 final_trajectory_df.to_csv(target_output_file, index=False)
 # """
-
-
-
-"""
-import matplotlib.pyplot as plt
-vehicles = final_trajectory_df["Vehicle_ID"].unique()
-plt.figure(figsize=(12,5))
-plt.title("Trajectory Lane X Coordinates")
-for vehicle in vehicles:
-    vehicle_df = final_trajectory_df[final_trajectory_df["Vehicle_ID"]==vehicle]
-    plt.plot(vehicle_df["Frame_ID"], vehicle_df["Lane_X"], label=vehicle)
-# plt.ylim(0,1500)
-plt.legend()
-plt.tight_layout()
-
-import matplotlib.pyplot as plt
-vehicles = final_trajectory_df["Vehicle_ID"].unique()
-plt.figure(figsize=(12,5))
-plt.title("Trajectory Lane X Velocities")
-for vehicle in vehicles:
-    vehicle_df = final_trajectory_df[final_trajectory_df["Vehicle_ID"]==vehicle]
-    plt.plot(vehicle_df["Frame_ID"], vehicle_df["Lane_X"].diff(), label=vehicle)
-# plt.ylim(0,1500)
-plt.legend()
-plt.tight_layout()
-
-
-plt.figure(figsize=(12,5))
-plt.title("Trajectory Cartesian X Coordinates")
-plt.subplot(2,1,1)
-for vehicle in vehicles:
-    vehicle_df = final_trajectory_df[final_trajectory_df["Vehicle_ID"]==vehicle]
-    plt.plot(vehicle_df["Frame_ID"], vehicle_df["Cartesian_X"])
-# plt.ylim(-35,35)
-plt.subplot(2,1,2)
-for vehicle in vehicles:
-    vehicle_df = final_trajectory_df[final_trajectory_df["Vehicle_ID"]==vehicle]
-    plt.plot(vehicle_df["Frame_ID"], vehicle_df["Cartesian_Y"])
-# plt.ylim(-35,35)
-plt.tight_layout()
-
-import matplotlib.pyplot as plt
-vehicles = final_trajectory_df["Vehicle_ID"].unique()
-plt.figure(figsize=(12,5))
-plt.title("Trajectory SpaceHeadways")
-for vehicle in vehicles:
-    vehicle_df = final_trajectory_df[final_trajectory_df["Vehicle_ID"]==vehicle]
-    plt.plot(vehicle_df["Frame_ID"], vehicle_df["Space_Hdwy"], label=vehicle)
-# plt.ylim(0,1500)
-plt.legend()
-plt.tight_layout()
-
-70B x 40H x 45T
-
-import matplotlib.pyplot as plt
-vehicles = final_trajectory_df["Vehicle_ID"].unique()
-plt.figure(figsize=(12,5))
-plt.title("Angle")
-for vehicle in vehicles:
-    vehicle_df = final_trajectory_df[final_trajectory_df["Vehicle_ID"]==vehicle]
-    plt.plot(vehicle_df["Frame_ID"], vehicle_df["v_Angle"], label=vehicle)
-# plt.ylim(0,1500)
-plt.legend()
-plt.tight_layout()
-
-import matplotlib.pyplot as plt
-vehicles = final_trajectory_df["Vehicle_ID"].unique()
-plt.figure(figsize=(12,5))
-plt.title("Velocity")
-for vehicle in vehicles:
-    vehicle_df = final_trajectory_df[final_trajectory_df["Vehicle_ID"]==vehicle]
-    plt.plot(vehicle_df["Frame_ID"], vehicle_df["v_Vel"], label=vehicle)
-# plt.ylim(0,1500)
-plt.legend()
-plt.tight_layout()
-
-
-import sys
-sys.exit(0)
-
-"""
-
-
 
 
 
@@ -302,29 +216,23 @@ with open(vehicle_dynamics_path+"accel_capacity_interpolator.pkl", "rb") as f:
 with open(vehicle_dynamics_path+"decel_capacity_interpolator.pkl", "rb") as f:
     decel_min_spl = pickle.load(f)
 
+def storeRelaxVars(wc1, wc2, file):
+    f = open(file, "w+")
+    f.write(str(wc1))
+    f.write("\n")
+    f.write(str(wc2))
+    f.write("\n")
+    f.close()
+
 trajectory_type = "hbb"
-if not os.path.exists(vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+".txt"):
-    df_final_traj = pd.read_csv(vehicle_trajectory_final_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", sep=",")
-    df_reconst_traj = reconstruct_trajectories_cvxopt(df_final_traj, accel_max_spl, decel_min_spl)
-    df_reconst_traj.to_csv(vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", index=False)
+df_final_traj = pd.read_csv(vehicle_trajectory_final_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", sep=",")
+df_reconst_traj, worst_case_relax_1, worst_case_relax_2 = reconstruct_trajectories_cvxopt(df_final_traj, accel_max_spl, decel_min_spl)
+df_reconst_traj.to_csv(vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", index=False)
+storeRelaxVars(worst_case_relax_1, worst_case_relax_2, vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+"_wc.txt")
 
 trajectory_type = "obb"
-if not os.path.exists(vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+".txt"):
-    df_final_traj = pd.read_csv(vehicle_trajectory_final_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", sep=",")
-    df_reconst_traj = reconstruct_trajectories_cvxopt(df_final_traj, accel_max_spl, decel_min_spl)
-    df_reconst_traj.to_csv(vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", index=False)
+df_final_traj = pd.read_csv(vehicle_trajectory_final_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", sep=",")
+df_reconst_traj, worst_case_relax_1, worst_case_relax_2 = reconstruct_trajectories_cvxopt(df_final_traj, accel_max_spl, decel_min_spl)
+df_reconst_traj.to_csv(vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+".txt", index=False)
+storeRelaxVars(worst_case_relax_1, worst_case_relax_2, vehicle_trajectory_reconstructed_path+RELEVANT_MODEL+"_"+trajectory_type+"_wc.txt")
 # """
-
-
-
-
-# import matplotlib.pyplot as plt
-# plt.figure()
-# plt.suptitle(RELEVANT_MODEL)
-# ctr = 1
-# for vehicle in vehicles:    
-#     plt.plot(df_reconst_traj[df_reconst_traj["Vehicle_ID"]==vehicle]["Frame_ID"], 
-#              df_reconst_traj[df_reconst_traj["Vehicle_ID"]==vehicle]["Lane_X"])
-# plt.tight_layout()
-
-
