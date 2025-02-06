@@ -27,12 +27,12 @@ import numpy as np
 # PATHS
 videos = ["DJI_0933.MOV", "DJI_0934.MOV", "DJI_0939.MOV", "DJI_0940.MOV", "DJI_0943.MOV", "DJI_0944.MOV"]
 video_path                    = "R:/Riehl/VehicleTrajectoryProject/1_DAT_VIDEO/"
-inference_annotations_path    = "../data/1_annotations/"
-homography_path               = "../data/1_homography/"
-frame_processed_path          = "../data/2_frame_processed/"
-trajectorized_unlabelled_path = "../data/3_A_trajectorized_unlabelled/"
-trajectorized_labelled_path   = "../data/3_C_vehiclized/"
-kalman_filtered_path          = "../data/4_kalman_filtered/"
+inference_annotations_path    = "../data_trajectories/1_annotations/"
+homography_path               = "../data_trajectories/1_homography/"
+frame_processed_path          = "../data_trajectories/2_frame_processed/"
+trajectorized_unlabelled_path = "../data_trajectories/3_A_trajectorized_unlabelled/"
+trajectorized_labelled_path   = "../data_trajectories/3_C_vehiclized/"
+kalman_filtered_path          = "../data_trajectories/4_kalman_filtered/"
 
 
 

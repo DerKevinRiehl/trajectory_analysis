@@ -1,0 +1,13 @@
+this is all Inference_s2anet_r50_fpn_fp16_1x_dota_le135.py.txt models
+
+Experiment 1
+DJI_0933.MOV
+DJI_0934.MOV
+
+Experiment 2
+DJI_0939.MOV
+DJI_0940.MOV
+
+Experiment 3
+DJI_0943.MOV
+DJI_0944.MOV
