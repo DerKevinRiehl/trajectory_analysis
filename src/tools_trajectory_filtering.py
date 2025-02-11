@@ -26,6 +26,7 @@ from scipy.interpolate._interpolate import PPoly
 from scipy.integrate import cumulative_simpson
 from scipy.optimize import isotonic_regression
 from numpy.lib.stride_tricks import sliding_window_view
+from typing import Optional
 
 from _constants import FILTERING_SAMPLING_FREQUENCY
 
@@ -34,7 +35,8 @@ from _constants import FILTERING_SAMPLING_FREQUENCY
 # METHODS: Constrained Optimization Approach
 # #############################################################################
 def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: PPoly, decel_min_spl: PPoly,
-                                    recon_window: float = 10.0, recon_step: float = 8.0) -> pd.DataFrame:
+                                    recon_window: float = 10.0, recon_step: float = 8.0, end_frame: Optional[int] = None,
+                                    relax_accel_cnst: bool = True) -> pd.DataFrame:
     """
     This method performs traectory reconstruction/filtering through a constrained optimization problem.
     Each vehicle trajectory is filtered by windowing for a specific time period and then stepping through to the next.
@@ -52,6 +54,11 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
             Reconstruction window in seconds
         recon_step: float = 8.0
             Step size to move reconstruction window in seconds, needs to less than or equal recon_window
+        end_frame: Optional[int] = None
+            Ending frame number, Optional integer, This is necessary for video 'DJI_0940.MOV' with end_frame = 6800-1
+        relax_accel_cnst: bool = True
+            Whether to relax the acceleration constraints or not
+
     
     Returns:
     --------
@@ -59,6 +66,8 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
             contains reconstructed trajectories of all vehicles in the experiment
     """
     reconstructed_trajectory_df = None
+    if end_frame is not None:
+        trajectory_df = trajectory_df[trajectory_df["Frame_ID"] <= end_frame]
 
     begin_df = trajectory_df[trajectory_df["Frame_ID"] == 0].copy()
     idx = begin_df["Lane_X"].idxmin()
@@ -113,50 +122,48 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
             a_min = max(decel_min_spl(v_noised[0]), decel_min_spl(np.mean(v_filtered)))
 
             v_recon = cp.Variable(shape=(len(v_noised),))
-            relax_1 = cp.Variable()
-            relax_2 = cp.Variable()
             
             a_recon = cp.diff(v_recon, k=1) * FILTERING_SAMPLING_FREQUENCY
             lam_soft_cnst = 0.05
-            obj = cp.norm(v_recon - v_filtered, 2)**2 + cp.std(a_recon)**2 + cp.sum(lam_soft_cnst * (a_recon/a_driver_max - 1)) + relax_1**2 + relax_2**2
-            cnst = [
-                v_recon >= 0,
-                cp.sum(v_recon)/FILTERING_SAMPLING_FREQUENCY == x_noised[-1] - x_noised[0],
-                a_recon - a_min >= relax_1,
-                a_recon - a_max <= relax_2,
-                relax_1 <= 0,
-                relax_2 >= 0
-            ]
+
+            if relax_accel_cnst:
+                relax_1 = cp.Variable()
+                relax_2 = cp.Variable()
+                obj = cp.norm(v_recon - v_filtered, 2)**2 + cp.std(a_recon)**2 + cp.sum(lam_soft_cnst * (a_recon/a_driver_max - 1)) + relax_1**2 + relax_2**2
+                cnst = [
+                    v_recon >= 0,
+                    cp.sum(v_recon)/FILTERING_SAMPLING_FREQUENCY == x_noised[-1] - x_noised[0],
+                    a_recon - a_min >= relax_1,
+                    a_recon - a_max <= relax_2,
+                    relax_1 <= 0,
+                    relax_2 >= 0
+                ]
+            else:
+                obj = cp.norm(v_recon - v_filtered, 2)**2 + cp.std(a_recon)**2 + cp.sum(lam_soft_cnst * (a_recon/a_driver_max - 1))
+                cnst = [
+                    v_recon >= 0,
+                    cp.sum(v_recon)/FILTERING_SAMPLING_FREQUENCY == x_noised[-1] - x_noised[0],
+                    a_recon - a_min >= 0,
+                    a_recon - a_max <= 0,
+                ]
             if vehicle_id != last_vehicle:
                 x_lead = lead_position[k:k+w_recon+1]
                 for t in range(len(v_noised)):
                     cnst += [
                         x_lead[t+1] - prec_vehicle_length - (x_noised[0] + cp.sum(v_recon[:t])/FILTERING_SAMPLING_FREQUENCY) >= 1.0
                     ]
-            try: # try with default solver "MOSEK"
-                prob = cp.Problem(cp.Minimize(obj), cnst)            
-                prob.solve(solver=cp.MOSEK, verbose=False)
-            except: # use SCS alternatively
-                prob = cp.Problem(cp.Minimize(obj), cnst)          
-                prob.solve(solver=cp.SCS, verbose=False)
+            prob = cp.Problem(cp.Minimize(obj), cnst)         
+            prob.solve(solver=cp.MOSEK, verbose=False)
             try:
                 speed_recon[k:k+w_recon] = np.maximum(0, v_recon.value)
                 accel_recon[k:k+w_recon-1] = a_recon.value
                 position_recon[k:k+w_recon+1] = np.cumsum(np.hstack([x_noised[0], v_recon.value/FILTERING_SAMPLING_FREQUENCY]))
+                if relax_accel_cnst:
+                    relax_1_records.append(relax_1.value)
+                    relax_2_records.append(relax_2.value)
             except:
-                print(x_noised[0])
-                print(len(v_noised))
-                print(v_recon)
-                print(v_recon.shape)
-                print(v_recon.value)
-                print(a_min)
-                print(a_max)
-                print(v_recon.value)
-                print(k, k+w_recon)
-                print(v_noised.shape)
+                print("ERROR with CvxOpt!")
                 sys.exit(1)
-            relax_1_records.append(relax_1.value)
-            relax_2_records.append(relax_2.value)
         vehicle_df["Lane_X"] = position_recon
         vehicle_df["v_Vel"] = np.hstack((speed_recon, 0))
         vehicle_df["v_Accel"] = np.hstack((accel_recon, [0, 0]))
@@ -178,7 +185,10 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
     reconstructed_trajectory_df = reconstructed_trajectory_df.reset_index().drop(columns=["index"])
     if trajectory_df["Vehicle_ID"].nunique() > 1:
         reconstructed_trajectory_df = _recompute_headways(reconstructed_trajectory_df)
-    return reconstructed_trajectory_df, np.min(relax_1_records), np.max(relax_2_records)
+    if relax_accel_cnst:
+        return reconstructed_trajectory_df, np.min(relax_1_records), np.max(relax_2_records)
+    else:
+        return reconstructed_trajectory_df
 
 
 # #############################################################################
@@ -409,9 +419,9 @@ def filter_and_reconstruct_trajectories(trajectory_df: pd.DataFrame) -> pd.DataF
 # METHODS FOR MAKRIDIS & KOUVELAS (2020)
 # #############################################################################
 def _label_speed_acceleration_region(trajectory_df: pd.DataFrame, common_driving_style: float = 0.5) -> pd.DataFrame:
-    with open('../data/7_vehicle_information/accel_capacity_interpolator.pkl', 'rb') as f:
+    with open('../data_trajectories/5_vehicle_information/vehicle_dynamics/accel_capacity_interpolator.pkl', 'rb') as f:
         accel_max_spl = pickle.load(f)
-    with open('../data/7_vehicle_information/decel_capacity_interpolator.pkl', 'rb') as f:
+    with open('../data_trajectories/5_vehicle_information/vehicle_dynamics/decel_capacity_interpolator.pkl', 'rb') as f:
         decel_min_spl = pickle.load(f)
     
     trajectory_df["Region"] = pd.NA
@@ -433,9 +443,9 @@ def _label_speed_acceleration_region(trajectory_df: pd.DataFrame, common_driving
 
 
 def _vehicle_dynamics_constraint(trajectory_df: pd.DataFrame) -> pd.DataFrame:
-    with open('../data/7_vehicle_information/accel_capacity_interpolator.pkl', 'rb') as f:
+    with open('../data_trajectories/5_vehicle_information/vehicle_dynamics/accel_capacity_interpolator.pkl', 'rb') as f:
         accel_max_spl = pickle.load(f)
-    with open('../data/7_vehicle_information/decel_capacity_interpolator.pkl', 'rb') as f:
+    with open('../data_trajectories/5_vehicle_information/vehicle_dynamics/decel_capacity_interpolator.pkl', 'rb') as f:
         decel_min_spl = pickle.load(f)
     
     if "Region" not in trajectory_df.columns:

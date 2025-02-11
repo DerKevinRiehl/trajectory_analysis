@@ -68,12 +68,14 @@ def speed_standard_deviation(trajectory_df: pd.DataFrame, start_frame: Optional[
     speed_std_df = pd.DataFrame(results, columns=["Vehicle_ID", "Vehicle_Rank", "Speed_Std_Dev"])
     speed_std_df = speed_std_df.sort_values(by=["Vehicle_Rank"])
 
+    """
     plt.figure()
     sns.scatterplot(data=speed_std_df, x="Vehicle_Rank", y="Speed_Std_Dev")
     p = np.polyfit(speed_std_df["Vehicle_Rank"].to_numpy(), speed_std_df["Speed_Std_Dev"].to_numpy(), deg=2)
     vals = np.poly1d(p)(speed_std_df["Vehicle_Rank"].to_numpy())
     plt.plot(speed_std_df["Vehicle_Rank"].to_numpy(), vals, "r--")
     plt.show()
+    """
     
     return speed_std_df
 
@@ -112,6 +114,21 @@ def speed_dft(trajectory_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _get_equilibrium_velocity(leader_velocity: np.ndarray, sampling_interval: Optional[float] = 0.04) -> np.ndarray:
+    time_arr = np.arange(0, len(leader_velocity)*sampling_interval, sampling_interval)
+    if len(time_arr) > len(leader_velocity):
+        time_arr = time_arr[:-1]
+    p = np.polyfit(time_arr, leader_velocity, deg=1)
+    Vel_Trend = np.poly1d(p)(time_arr)
+    Vel_DeTrended = leader_velocity - Vel_Trend
+    v_Eq = np.zeros_like(leader_velocity)
+    stepsize = int(50.0 / sampling_interval)
+    for i in range(0, len(leader_velocity), stepsize):
+        if i+stepsize >= len(leader_velocity):
+            v_Eq[i:] = Vel_Trend[i:] + np.median(Vel_DeTrended[i:])
+        else:
+            v_Eq[i:i+stepsize] = Vel_Trend[i:i+stepsize] + np.median(Vel_DeTrended[i:i+stepsize])
+    return v_Eq
+    """
     v_Eq = np.zeros_like(leader_velocity)
     stepsize = int(20.0 / sampling_interval)
     for i in range(0, len(leader_velocity), stepsize):
@@ -120,6 +137,7 @@ def _get_equilibrium_velocity(leader_velocity: np.ndarray, sampling_interval: Op
         else:
             v_Eq[i:i+stepsize] = np.median(leader_velocity[i:i+stepsize])
     return v_Eq
+    """
 
 
 def _get_correlation_matrix(X: np.ndarray, m: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -175,3 +193,38 @@ def estimate_L2gain_CTHpolicy(trajectory_df: pd.DataFrame, start_frame: Optional
     gammaSquared = pd.DataFrame(gammaSquared.items(), columns=["Vehicle_ID", "gammaSquared"])
     gammaSquared["L2gain"] = np.sqrt(gammaSquared["gammaSquared"])
     return gammaSquared
+
+
+def estimate_LinfinityGain_CTHpolicy(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None):
+    if end_frame is None:
+        end_frame = trajectory_df["Frame_ID"].max()-1
+    
+    standstill_distance = 2.0
+    unique_vehicles = trajectory_df["Vehicle_ID"].unique()
+    LinfinityGain = {}
+    for vehicle_id in unique_vehicles:
+        vehicle_df = trajectory_df[(trajectory_df["Vehicle_ID"] == vehicle_id) & (trajectory_df["Frame_ID"] >= start_frame) & (trajectory_df["Frame_ID"] <= end_frame)].copy()
+        if not vehicle_df["Frame_ID"].is_monotonic_increasing:
+            vehicle_df = vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
+
+        prec_vehicle_id = vehicle_df["Proceeding"].unique()[0]
+        prec_vehicle_df = trajectory_df[(trajectory_df["Vehicle_ID"] == prec_vehicle_id) & (trajectory_df["Frame_ID"] >= start_frame) & (trajectory_df["Frame_ID"] <= end_frame)].copy()
+        if not prec_vehicle_df["Frame_ID"].is_monotonic_increasing:
+            prec_vehicle_df = prec_vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
+        
+        Leader_Velocity = prec_vehicle_df["v_Vel"].to_numpy()
+        Ego_Velocity = vehicle_df["v_Vel"].to_numpy()
+        Space_Hdwy = vehicle_df["Space_Hdwy"].to_numpy()
+
+        Vel_Eq = _get_equilibrium_velocity(Leader_Velocity)
+
+        vehicle_length = vehicle_df["v_Length"].unique()[0]
+        Time_Gap = (Space_Hdwy - vehicle_length - standstill_distance) / Ego_Velocity
+        timeGap_Eq = np.median(Time_Gap)
+        Space_Hdwy_Eq = vehicle_length + standstill_distance + timeGap_Eq * Vel_Eq
+
+        eta = np.amax(Ego_Velocity-Vel_Eq) / np.amax(Leader_Velocity-Vel_Eq)
+        LinfinityGain[vehicle_id] = eta
+    
+    LinfinityGain = pd.DataFrame(LinfinityGain.items(), columns=["Vehicle_ID", "LinfGain"])
+    return LinfinityGain

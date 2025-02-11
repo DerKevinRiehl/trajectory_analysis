@@ -1,0 +1,16 @@
+Vehicle_ID	Powertrain	Gearbox	ADAS	Model
+VEHICLE_1	ICES	Automatic	Yes	VW Scharan / SEAT Alhambra II BJ 2022
+VEHICLE_2	Electric	Automatic	No	Toyota BZ 4 X 2022
+VEHICLE_3	ICES	Manual	No	???
+VEHICLE_4	ICES	Manual	No	???
+VEHICLE_5	ICES	Automatic	No	VW Scharan 1.4 TSI BJ 2017
+VEHICLE_6	ICES	Automatic	No	Renault Laguna III BJ 2014
+VEHICLE_7	ICES	Automatic	No	Toyota Verso 2.2 D-4D BJ 2015
+VEHICLE_8	ICES	Manual	No	Citroen Picasso C3 1.6 VTi 120 EGS6 2015
+VEHICLE_9	ICES	Manual	No	Ford Focus NA3, Bj 2018
+VEHICLE_10	ICES	Automatic	Yes	VW Caddy Maxi, 1.4 TSI Jg. 2019
+VEHICLE_11	ICES	Automatic	Yes	Polestar 1, Rennversion von volvo mit 2lt Benzinmotor 2021
+VEHICLE_12	ICES	Manual	No	VW Caddy 2K 2012 1.2 TSI
+VEHICLE_13	ICES	Manual	No	Peugeot RCZ R 2015
+VEHICLE_14	Electric	Automatic	Yes	VW Golf, Thomas Huber, Gold VII Typ AU 2014
+VEHICLE_15	ICES	Automatic	Yes	Audi A4 2.0 TDI DSG 2016 TCS
