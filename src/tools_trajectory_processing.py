@@ -397,7 +397,7 @@ def processTrajectory_synthetic(trajectory_df):
     # Determine Proceeding Vehicle
     trajectory_df["proceeding_vehicle"] = "VEHICLE_1"
     # Filter Kalman States
-    trajectory_df = _filterKalmanStates(trajectory_df)
+    #trajectory_df = _filterKalmanStates(trajectory_df)
     # Calculate Polar Coordinates
     trajectory_df["x_polar"] = np.arctan2(-trajectory_df["state2"], trajectory_df["state1"])
     trajectory_df.loc[trajectory_df["x_polar"] <= 0, "x_polar"] += 2*np.pi
@@ -427,7 +427,7 @@ def processTrajectory_synthetic(trajectory_df):
         vehicle_df["velocity_x"] = vehicle_df["state1"].diff(1).shift(1).fillna(0) / sampling_interval
         vehicle_df["velocity_y"] = vehicle_df["state2"].diff(1).shift(1).fillna(0) / sampling_interval
         vehicle_df["velocity_cartesian"] = np.sqrt(np.square(vehicle_df["velocity_x"]) + np.square(vehicle_df["velocity_y"]))
-        vehicle_df = _filterVelocity(vehicle_df)
+        #vehicle_df = _filterVelocity(vehicle_df)
         vehicle_df = vehicle_df[["frame_nr", "vehicle", "x_lane", "y_lane", "velocity_cartesian"]]
         if lane_coordinate_df is None:
             lane_coordinate_df = vehicle_df.copy()

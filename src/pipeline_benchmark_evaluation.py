@@ -291,4 +291,4 @@ platoon_consistency.append(evaluateModel_platoonConsistency("Inference_retinanet
 # platoon_consistency.append(evaluateModel_platoonConsistency("Inference_yolo_m_hbb",                 "Yolo M", dual=False, vehicle_trajectory_final_path=vehicle_trajectory_final_path))
 # platoon_consistency.append(evaluateModel_platoonConsistency("Inference_yolo_l_hbb",                 "Yolo L", dual=False, vehicle_trajectory_final_path=vehicle_trajectory_final_path))
 # platoon_consistency.append(evaluateModel_platoonConsistency("Inference_yolo_x_hbb",                 "Yolo X", dual=False, vehicle_trajectory_final_path=vehicle_trajectory_final_path))
-platoon_consistencyDF_R = pd.DataFrame(platoon_consistency, columns=["model", "name", "dual", "max_err_h", "min_err_h", "avg_err_h", "std_err_h", "max_err_o", "min_err_o", "avg_err_o", "std_err_o", "improvement"])
+platoon_consistencyDF_R = pd.DataFrame(platoon_consistency, columns=["model", "name", "dual", "max_err_h", "min_err_h", "avg_err_h", "std_err_h", "max_err_o", "min_err_o", "avg_err_o", "std_err_o", "improvement", "o_relax_1", "o_relax_2"])
