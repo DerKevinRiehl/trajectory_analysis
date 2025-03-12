@@ -40,10 +40,9 @@ import _constants as cs
 # #############################################################################
 # CONSTANTS
 # #############################################################################
-COMPARE_FILTERING = False
+COMPARE_FILTERING = True
 
 DATA_ROOT = "../data_trajectories/6_final_trajectories/"
-INFO_ROOT = "../data_trajectories/5_vehicle_information/"
 RCSN_ROOT = "../data_trajectories/7_final_trajectories_reconstructed/"
 
 ALL_VIDEOS = [
@@ -63,12 +62,6 @@ RELEVANT_VIDEO = "DJI_0933.MOV"
 # #############################################################################
 # 1. Filtering
 # #############################################################################
-
-with open(INFO_ROOT + 'vehicle_dynamics/accel_capacity_interpolator.pkl', 'rb') as f:
-    accel_max_spl = pickle.load(f)
-with open(INFO_ROOT + 'vehicle_dynamics/decel_capacity_interpolator.pkl', 'rb') as f:
-    decel_min_spl = pickle.load(f)
-
 if COMPARE_FILTERING:
     df = pd.read_csv(DATA_ROOT + RELEVANT_VIDEO + ".txt", sep=",")
     df = plot_accelerations(df)
@@ -79,11 +72,14 @@ if COMPARE_FILTERING:
     #plot_oblique_trajectories(df, start_frame=0, end_frame=2500, vehicle_labels_in_plot=True, active_cursor=True)
     #plt.show()
 
-    #df_info = pd.read_csv(INFO_ROOT + RELEVANT_VIDEO + ".txt", sep="\t")
+    df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + RELEVANT_VIDEO + ".txt", sep="\t")
     #print(df_info)
-
-    df_CvxOpt = reconstruct_trajectories_cvxopt(df, accel_max_spl, decel_min_spl, end_frame=None, relax_accel_cnst=False)
-    df_PIButterworth = apply_physics_informed_butterworth_filter(df)
+    
+    df_CvxOpt = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
+    df_PIButterworth = apply_physics_informed_butterworth_filter(df, vehicle_info_df=df_info)
+    df_CvxOpt.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_CvxOptNoRelax.txt", index=False)
+    df_PIButterworth.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_PIButterworth.txt", index=False)
+    
 
     from tools_trajectory_evaluation import calculateInternalConsistency
     from tools_trajectory_evaluation import calculatePlatoonConsistency_Headway
@@ -118,6 +114,7 @@ if COMPARE_FILTERING:
     print(f"Distance Travelled = {distance_travelled}")
     print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
     print(vals_violation, total_vehicle_frames)
+    sys.exit(1)
 
     unique_vehicles = df["Vehicle_ID"].unique()
     for vehicle_id in unique_vehicles:
@@ -125,7 +122,15 @@ if COMPARE_FILTERING:
         vehicle_df_CvxOpt = df_CvxOpt[df_CvxOpt["Vehicle_ID"] == vehicle_id]
         vehicle_df_PIButterworth = df_PIButterworth[df_PIButterworth["Vehicle_ID"] == vehicle_id]
 
-        fig, axs = plt.subplots(2, 2)
+        mfc_car_id = df_info.loc[df_info["Vehicle_ID"] == vehicle_id, "MFC_CarID"].item()
+        with open(cs.VEHICLE_INFO_PATH + f"ID{mfc_car_id}_AccelCapInterp.pkl", 'rb') as f:
+            accel_max_spl = pickle.load(f)
+        with open(cs.VEHICLE_INFO_PATH + f"ID{mfc_car_id}_DecelCapInterp.pkl", 'rb') as f:
+            decel_min_spl = pickle.load(f)
+
+        plt.rc('font', family='sans-serif') 
+        plt.rc('font', serif='Arial') 
+        fig, axs = plt.subplots(2, 2, figsize=(12, 5), dpi=100)
         axs[0, 0].plot(vehicle_df["Global_Time"], vehicle_df["v_Vel"], label="Original")
         axs[0, 0].plot(vehicle_df_CvxOpt["Global_Time"], vehicle_df_CvxOpt["v_Vel"], label="CvxOpt", linestyle="--")
         axs[0, 0].plot(vehicle_df_PIButterworth["Global_Time"], vehicle_df_PIButterworth["v_Vel"], label="PI-Butterworth", linestyle="-.", alpha=0.75)
@@ -179,15 +184,15 @@ for video in ALL_VIDEOS:
     #df = pd.read_csv(DATA_ROOT + video + ".txt", sep=",")
     #df = plot_accelerations(df)
     #plt.close()
+    #df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
     #if video == "DJI_0940.MOV":
-    #    df_reconst_traj = reconstruct_trajectories_cvxopt(df, accel_max_spl, decel_min_spl, end_frame=6540, relax_accel_cnst=False)
+    #    df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=6540, relax_accel_cnst=False)
     #else:
-    #    df_reconst_traj = reconstruct_trajectories_cvxopt(df, accel_max_spl, decel_min_spl, end_frame=None, relax_accel_cnst=False)
+    #    df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False)
     #df_reconst_traj.to_csv(RCSN_ROOT + video + "_norelax.txt", index=False)
 
     df = pd.read_csv(RCSN_ROOT + video + "_norelax.txt", sep=",")
-
-    df_info = pd.read_csv(INFO_ROOT + "vehicle_dynamics/" + video + ".txt", sep="\t")
+    df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
     
     L2gains_df = estimate_L2gain_CTHpolicy(df, start_frame=250, end_frame=df["Frame_ID"].max()-250)
     LinfGains_df = estimate_LinfinityGain_CTHpolicy(df, start_frame=250, end_frame=df["Frame_ID"].max()-250)
@@ -263,7 +268,7 @@ plt.show()
 for video in ALL_VIDEOS:
     print(f"**************** {video} ****************")
     df = pd.read_csv(RCSN_ROOT + video + "_norelax.txt", sep=",")
-    df_info = pd.read_csv(INFO_ROOT + "vehicle_dynamics/" + video + ".txt", sep="\t")
+    df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
 
     plot_velocities_and_headways(df)
     plot_time_space_diagram(df)

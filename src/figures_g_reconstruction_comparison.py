@@ -1,0 +1,180 @@
+import os
+import sys
+import pickle
+
+import numpy as np
+import pandas as pd
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from matplotlib import gridspec
+from _constants import VEHICLE_INFO_PATH
+from tools_trajectory_plotting import plot_accelerations
+
+
+# Root Directories
+DATA_ROOT = "../data_trajectories/6_final_trajectories/"
+RCSN_ROOT = "../data_trajectories/7_final_trajectories_reconstructed/"
+RELEVANT_VIDEO = "DJI_0933.MOV"
+
+# Load
+df = pd.read_csv(DATA_ROOT + RELEVANT_VIDEO + ".txt", sep=",")
+df = plot_accelerations(df)
+plt.close()
+df_info = pd.read_csv(VEHICLE_INFO_PATH + RELEVANT_VIDEO + ".txt", sep="\t")
+df_CvxOpt = pd.read_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_CvxOptNoRelax.txt", sep=",")
+df_PIButterworth = pd.read_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_PIButterworth.txt", sep=",")
+
+vehicle_id = "VEHICLE_1"
+vehicle_df = df[df["Vehicle_ID"] == vehicle_id]
+if not vehicle_df["Frame_ID"].is_monotonic_increasing:
+    vehicle_df = vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
+vehicle_df = vehicle_df.reset_index().drop(columns=["index"])
+
+vehicle_df_CvxOpt = df_CvxOpt[df_CvxOpt["Vehicle_ID"] == vehicle_id]
+if not vehicle_df_CvxOpt["Frame_ID"].is_monotonic_increasing:
+    vehicle_df_CvxOpt = vehicle_df_CvxOpt.sort_values(by=["Frame_ID"], ascending=True)
+vehicle_df_CvxOpt = vehicle_df_CvxOpt.reset_index().drop(columns=["index"])
+
+vehicle_df_PIButterworth = df_PIButterworth[df_PIButterworth["Vehicle_ID"] == vehicle_id]
+if not vehicle_df_PIButterworth["Frame_ID"].is_monotonic_increasing:
+    vehicle_df_PIButterworth = vehicle_df_PIButterworth.sort_values(by=["Frame_ID"], ascending=True)
+vehicle_df_PIButterworth = vehicle_df_PIButterworth.reset_index().drop(columns=["index"])
+
+mfc_car_id = df_info.loc[df_info["Vehicle_ID"] == vehicle_id, "MFC_CarID"].item()
+with open(VEHICLE_INFO_PATH + f"ID{mfc_car_id}_AccelCapInterp.pkl", 'rb') as f:
+    accel_max_spl = pickle.load(f)
+with open(VEHICLE_INFO_PATH + f"ID{mfc_car_id}_DecelCapInterp.pkl", 'rb') as f:
+    decel_min_spl = pickle.load(f)
+
+# Plot
+plt.rc('font', family='sans-serif') 
+plt.rc('font', serif='Arial') 
+fig, axs = plt.subplots(1, 3, figsize=(12, 3), dpi=100)
+axs[0].plot(vehicle_df["Global_Time"], vehicle_df["v_Vel"], label="Before Reconstruction")
+axs[0].plot(vehicle_df_CvxOpt["Global_Time"], vehicle_df_CvxOpt["v_Vel"], label="Proposed Reconstruction", linestyle="--")
+axs[0].plot(vehicle_df_PIButterworth["Global_Time"], vehicle_df_PIButterworth["v_Vel"], label="PI-Butterworth Reconstruction", linestyle="-.", alpha=0.75)
+axs[0].set_xlabel("Time [$s$]")
+axs[0].set_ylabel("Speed [$m/s$]")
+axs[0].grid()
+axs[1].plot(vehicle_df["Global_Time"], vehicle_df["Space_Hdwy"], label="Before Reconstruction")
+axs[1].plot(vehicle_df_CvxOpt["Global_Time"], vehicle_df_CvxOpt["Space_Hdwy"], label="Proposed Reconstruction", linestyle="--")
+axs[1].plot(vehicle_df_PIButterworth["Global_Time"], vehicle_df_PIButterworth["Space_Hdwy"], label="PI-Butterworth Reconstruction", linestyle="-.", alpha=0.75)
+axs[1].set_xlabel("Time [$s$]")
+axs[1].set_ylabel("Space Headway [$m$]")
+axs[1].grid()
+axs[2].plot(vehicle_df["Global_Time"], vehicle_df["v_Accel"], label="Before Reconstruction")
+axs[2].plot(vehicle_df_CvxOpt["Global_Time"], vehicle_df_CvxOpt["v_Accel"], label="Proposed Reconstruction", linestyle="--")
+axs[2].plot(vehicle_df_PIButterworth["Global_Time"], vehicle_df_PIButterworth["v_Accel"], label="PI-Butterworth Reconstruction", linestyle="-.", alpha=0.75)
+axs[2].set_xlabel("Time [$s$]")
+axs[2].set_ylabel("Acceleration [$m/s^2$]")
+axs[2].grid()
+handles, labels = axs[0].get_legend_handles_labels()
+fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(.5, -0.05), ncol=3)
+fig.tight_layout()
+fig.savefig(f"./ReconstructionComparison_{RELEVANT_VIDEO}_{vehicle_id}_Trajectory.pdf", bbox_inches='tight', dpi=100)
+
+fig, axs = plt.subplots(1, 2, figsize=(8, 3), dpi=100)
+axs[0].plot(vehicle_df["Global_Time"], vehicle_df["Lane_X"], label="Before Reconstruction")
+axs[0].plot(vehicle_df_CvxOpt["Global_Time"], vehicle_df_CvxOpt["Lane_X"], label="Proposed Reconstruction", linestyle="--")
+axs[0].plot(vehicle_df_PIButterworth["Global_Time"], vehicle_df_PIButterworth["Lane_X"], label="PI-Butterworth Reconstruction", linestyle="-.", alpha=0.75)
+axs[0].set_xlabel("Time [$s$]")
+axs[0].set_ylabel("Position [$m$]")
+axs[0].grid()
+err_lanex_cvxopt = abs(vehicle_df_CvxOpt["Lane_X"].to_numpy() - vehicle_df["Lane_X"].to_numpy())
+err_lanex_pibutterworth = abs(vehicle_df_PIButterworth["Lane_X"].to_numpy() - vehicle_df["Lane_X"].to_numpy())
+axs[1].plot(vehicle_df_CvxOpt["Global_Time"], err_lanex_cvxopt, label="Proposed Reconstruction", linestyle="--")
+axs[1].plot(vehicle_df_PIButterworth["Global_Time"], err_lanex_pibutterworth, label="PI-Butterworth Reconstruction", linestyle="-.", alpha=0.75)
+axs[1].set_xlabel("Time [$s$]")
+axs[1].set_ylabel("Absolute Position Error [$m$]")
+axs[1].grid()
+handles, labels = axs[0].get_legend_handles_labels()
+fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(.5, -0.05), ncol=3)
+fig.tight_layout()
+fig.savefig(f"./ReconstructionComparison_{RELEVANT_VIDEO}_{vehicle_id}_LaneX.pdf", bbox_inches='tight', dpi=100)
+
+fig = plt.figure(figsize=(12, 3), dpi=100)
+v_min = min(vehicle_df_CvxOpt["v_Vel"].min(), vehicle_df["v_Vel"].min())
+v_max = max(vehicle_df_CvxOpt["v_Vel"].max(), vehicle_df["v_Vel"].max())
+speeds = np.linspace(v_min, v_max, 100)
+accel_max = accel_max_spl(speeds)
+accel_min = decel_min_spl(speeds)
+plt.plot(vehicle_df["v_Vel"], vehicle_df["v_Accel"], label="Before Reconstruction", alpha=0.75)
+plt.plot(vehicle_df_CvxOpt["v_Vel"], vehicle_df_CvxOpt["v_Accel"], label="Proposed Reconstruction", linestyle="--")
+plt.plot(vehicle_df_PIButterworth["v_Vel"], vehicle_df_PIButterworth["v_Accel"], label="PI-Butterworth Reconstruction", linestyle="-.", alpha=0.75)
+plt.plot(speeds, accel_max, label="Vehicle Acceleration Capacity", color="black", linestyle="--")
+plt.plot(speeds, 0.5*accel_max, label="Driver Acceleration Capacity", color="black")
+plt.plot(speeds, accel_min, label="Vehicle Deceleration Capacity", color="red")
+plt.grid()
+plt.xlabel("Speed [$m/s$]")
+plt.ylabel("Acceleration [$m/s^2$]")
+fig.legend(loc='outside right', bbox_to_anchor=(1.7, 0.5))
+fig.tight_layout()
+fig.savefig(f"./ReconstructionComparison_{RELEVANT_VIDEO}_{vehicle_id}_SpeedAccelCurve.pdf", bbox_inches='tight', dpi=100)
+
+plt.show()
+
+
+maxAbsErr_CvxOpt = [
+    0.3434, 0.8784, 0.3176, 0.3244, 0.3038, 0.3861, 0.3369, 0.3376, 0.3574, 0.3794, 0.4621, 0.3848, 0.4310, 0.6722,
+]
+meanAbsErr_CvxOpt = [
+    0.0748, 0.0634, 0.0639, 0.0724, 0.0573, 0.0621, 0.0573, 0.0533, 0.0525, 0.0666, 0.0506, 0.0550, 0.0573, 0.0679,
+]
+
+maxAbsErr_PIButterworth = [
+    10.0965, 4.7498, 17.2330, 4.7039, 2.4352, 9.4504, 14.4192, 4.6432, 9.8411, 5.0093, 13.9010, 7.5365, 6.1789, 11.3832,
+]
+meanAbsErr_PIButterworth = [
+    4.7032, 2.0734, 8.4069, 2.9474, 0.8117, 4.3275, 6.8550, 2.3106, 4.5463, 2.2924, 5.8906, 2.2039, 2.8186, 5.8588,
+]
+
+
+# Function to set up broken axis
+def setup_broken_axis(gs_cell, title, data, ylim_top, ylim_bottom):
+    gs_sub = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs_cell, height_ratios=[1, 3], hspace=0.05)
+    ax_top = fig.add_subplot(gs_sub[0])
+    ax_bottom = fig.add_subplot(gs_sub[1])
+    
+    plt.sca(ax_top)
+    plt.title(title)
+    data.plot.bar(ax=ax_top, edgecolor="black", color=["blue","aqua"], width=0.75, legend=False, zorder=3)
+    ax_top.set_ylim(ylim_top)
+    ax_top.spines['bottom'].set_visible(False)
+    ax_top.tick_params(labelbottom=False, bottom=False)
+    ax_top.grid(zorder=0)
+    
+    data.plot.bar(ax=ax_bottom, edgecolor="black", color=["blue","aqua"], width=0.75, legend=False, zorder=3)
+    ax_bottom.set_ylim(ylim_bottom)
+    ax_bottom.spines['top'].set_visible(False)
+    ax_bottom.grid(zorder=0)
+    unique_vehicle_ids = [f"V_{i}" for i in range(1, 15)]
+    ax_bottom.set_xticklabels(unique_vehicle_ids, rotation=45, ha='right')
+    
+    # Add diagonal lines
+    d = .015
+    kwargs = dict(transform=ax_top.transAxes, color='k', clip_on=False)
+    ax_top.plot((-d, +d), (-d, +d), **kwargs)
+    ax_top.plot((1 - d, 1 + d), (-d, +d), **kwargs)
+    kwargs.update(transform=ax_bottom.transAxes)
+    ax_bottom.plot((-d, +d), (1 - d, 1 + d), **kwargs)
+    ax_bottom.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)
+    
+    return ax_bottom
+
+# Subplot 1: Relaxation Variable 1
+fig = plt.figure(figsize=(12, 3), dpi=100)
+gs = gridspec.GridSpec(1, 2, width_ratios=[1, 1])
+df1 = pd.DataFrame(np.asarray([maxAbsErr_CvxOpt, maxAbsErr_PIButterworth]).transpose(), columns=["Proposed Reconstruction", "PI-Butterworth Reconstruction"])
+ax1 = setup_broken_axis(gs[0], "Max. Absolute Position Error [$m$]", df1, (1, 20), (0, 1))
+ax1.set_ylabel("")
+df2 = pd.DataFrame(np.asarray([meanAbsErr_CvxOpt, meanAbsErr_PIButterworth]).transpose(), columns=["Proposed Reconstruction", "PI-Butterworth Reconstruction"])
+ax2 = setup_broken_axis(gs[1], "Mean Absolute Position Error [$m$]", df1, (1, 20), (0, 1))
+ax2.set_ylabel("")
+handles, labels = ax1.get_legend_handles_labels()
+fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(.5, -0.05), ncol=2)
+fig.tight_layout()
+fig.savefig(f"./ReconstructionComparison_{RELEVANT_VIDEO}_LaneXErrors.pdf", bbox_inches='tight', dpi=100)
+
+plt.show()

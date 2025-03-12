@@ -33,6 +33,7 @@ frame_processed_path          = "../data_trajectories/2_frame_processed/"
 trajectorized_unlabelled_path = "../data_trajectories/3_A_trajectorized_unlabelled/"
 trajectorized_labelled_path   = "../data_trajectories/3_C_vehiclized/"
 kalman_filtered_path          = "../data_trajectories/4_kalman_filtered/"
+VEHICLE_INFO_PATH = "../data_trajectories/5_vehicle_information/vehicle_dynamics/"
 
 
 
