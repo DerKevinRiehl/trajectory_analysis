@@ -40,15 +40,15 @@ import _constants as cs
 # #############################################################################
 # CONSTANTS
 # #############################################################################
-COMPARE_FILTERING = True
+COMPARE_FILTERING = False
 
 DATA_ROOT = "../data_trajectories/6_final_trajectories/"
 RCSN_ROOT = "../data_trajectories/7_final_trajectories_reconstructed/"
 
 ALL_VIDEOS = [
-    #"DJI_0933.MOV", "DJI_0934.MOV", 
-    #"DJI_0939.MOV", "DJI_0940.MOV", 
-    "DJI_0943.MOV", "DJI_0944.MOV"
+    "DJI_0933.MOV", "DJI_0934.MOV", 
+    "DJI_0939.MOV", "DJI_0940.MOV", 
+    #"DJI_0943.MOV", "DJI_0944.MOV"
 ]
 
 RELEVANT_VIDEO = "DJI_0933.MOV"
@@ -114,63 +114,6 @@ if COMPARE_FILTERING:
     print(f"Distance Travelled = {distance_travelled}")
     print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
     print(vals_violation, total_vehicle_frames)
-    sys.exit(1)
-
-    unique_vehicles = df["Vehicle_ID"].unique()
-    for vehicle_id in unique_vehicles:
-        vehicle_df = df[df["Vehicle_ID"] == vehicle_id]
-        vehicle_df_CvxOpt = df_CvxOpt[df_CvxOpt["Vehicle_ID"] == vehicle_id]
-        vehicle_df_PIButterworth = df_PIButterworth[df_PIButterworth["Vehicle_ID"] == vehicle_id]
-
-        mfc_car_id = df_info.loc[df_info["Vehicle_ID"] == vehicle_id, "MFC_CarID"].item()
-        with open(cs.VEHICLE_INFO_PATH + f"ID{mfc_car_id}_AccelCapInterp.pkl", 'rb') as f:
-            accel_max_spl = pickle.load(f)
-        with open(cs.VEHICLE_INFO_PATH + f"ID{mfc_car_id}_DecelCapInterp.pkl", 'rb') as f:
-            decel_min_spl = pickle.load(f)
-
-        plt.rc('font', family='sans-serif') 
-        plt.rc('font', serif='Arial') 
-        fig, axs = plt.subplots(2, 2, figsize=(12, 5), dpi=100)
-        axs[0, 0].plot(vehicle_df["Global_Time"], vehicle_df["v_Vel"], label="Original")
-        axs[0, 0].plot(vehicle_df_CvxOpt["Global_Time"], vehicle_df_CvxOpt["v_Vel"], label="CvxOpt", linestyle="--")
-        axs[0, 0].plot(vehicle_df_PIButterworth["Global_Time"], vehicle_df_PIButterworth["v_Vel"], label="PI-Butterworth", linestyle="-.", alpha=0.75)
-        axs[0, 0].set_ylabel("Speed (m/s)")
-        axs[0, 0].legend()
-
-        axs[0, 1].plot(vehicle_df["Global_Time"], vehicle_df["Space_Hdwy"], label="Original")
-        axs[0, 1].plot(vehicle_df_CvxOpt["Global_Time"], vehicle_df_CvxOpt["Space_Hdwy"], label="CvxOpt", linestyle="--")
-        axs[0, 1].plot(vehicle_df_PIButterworth["Global_Time"], vehicle_df_PIButterworth["Space_Hdwy"], label="PI-Butterworth", linestyle="-.", alpha=0.75)
-        axs[0, 1].set_ylabel("Space_Headway (m)")
-        axs[0, 1].legend()
-
-        axs[1, 0].plot(vehicle_df["Global_Time"], vehicle_df["v_Accel"], label="Original")
-        axs[1, 0].plot(vehicle_df_CvxOpt["Global_Time"], vehicle_df_CvxOpt["v_Accel"], label="CvxOpt", linestyle="--")
-        axs[1, 0].plot(vehicle_df_PIButterworth["Global_Time"], vehicle_df_PIButterworth["v_Accel"], label="PI-Butterworth", linestyle="-.", alpha=0.75)
-        axs[1, 0].set_ylabel("Acceleration (m/s^2)")
-        axs[1, 0].legend()
-
-        axs[1, 1].plot(vehicle_df["Global_Time"], vehicle_df["Lane_X"], label="Original")
-        axs[1, 1].plot(vehicle_df_CvxOpt["Global_Time"], vehicle_df_CvxOpt["Lane_X"], label="CvxOpt", linestyle="--")
-        axs[1, 1].plot(vehicle_df_PIButterworth["Global_Time"], vehicle_df_PIButterworth["Lane_X"], label="PI-Butterworth", linestyle="-.", alpha=0.75)
-        axs[1, 1].set_ylabel("Position (m)")
-        axs[1, 1].legend()
-
-        plt.figure()
-        v_min = min(vehicle_df_CvxOpt["v_Vel"].min(), vehicle_df["v_Vel"].min())
-        v_max = max(vehicle_df_CvxOpt["v_Vel"].max(), vehicle_df["v_Vel"].max())
-        speeds = np.linspace(v_min, v_max, 100)
-        accel_max = accel_max_spl(speeds)
-        accel_min = decel_min_spl(speeds)
-        plt.plot(vehicle_df["v_Vel"], vehicle_df["v_Accel"], label="Original", alpha=0.75)
-        plt.plot(vehicle_df_CvxOpt["v_Vel"], vehicle_df_CvxOpt["v_Accel"], label="CvxOpt", linestyle="--")
-        plt.plot(vehicle_df_PIButterworth["v_Vel"], vehicle_df_PIButterworth["v_Accel"], label="PI-Butterworth", linestyle="-.", alpha=0.75)
-        plt.plot(speeds, accel_max, label="Max. Accel. Capacity", color="black", linestyle="--")
-        plt.plot(speeds, 0.5*accel_max, label="Driver Accel. Capacity", color="black")
-        plt.plot(speeds, accel_min, label="Decel. Capacity", color="red")
-        plt.xlabel("Speed (m/s)")
-        plt.ylabel("Acceleration (m/s^2)")
-        plt.legend()
-        plt.show()
 
     sys.exit(1)
 
@@ -181,15 +124,16 @@ if COMPARE_FILTERING:
 # """
 Analysis_df = None
 for video in ALL_VIDEOS:
-    #df = pd.read_csv(DATA_ROOT + video + ".txt", sep=",")
-    #df = plot_accelerations(df)
-    #plt.close()
-    #df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
-    #if video == "DJI_0940.MOV":
-    #    df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=6540, relax_accel_cnst=False)
-    #else:
-    #    df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False)
-    #df_reconst_traj.to_csv(RCSN_ROOT + video + "_norelax.txt", index=False)
+    df = pd.read_csv(DATA_ROOT + video + ".txt", sep=",")
+    df = plot_accelerations(df)
+    plt.close()
+    df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
+    print(video)
+    if video == "DJI_0940.MOV":
+        df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=6540, relax_accel_cnst=False, weight_speed_noise=10.0)
+    else:
+        df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
+    df_reconst_traj.to_csv(RCSN_ROOT + video + "_norelax.txt", index=False)
 
     df = pd.read_csv(RCSN_ROOT + video + "_norelax.txt", sep=",")
     df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
