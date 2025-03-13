@@ -40,7 +40,8 @@ import _constants as cs
 # #############################################################################
 # CONSTANTS
 # #############################################################################
-COMPARE_FILTERING = False
+COMPARE_RECONSTRUCTION = False
+RUN_RECONSTRUCTION = False
 
 DATA_ROOT = "../data_trajectories/6_final_trajectories/"
 RCSN_ROOT = "../data_trajectories/7_final_trajectories_reconstructed/"
@@ -48,7 +49,7 @@ RCSN_ROOT = "../data_trajectories/7_final_trajectories_reconstructed/"
 ALL_VIDEOS = [
     "DJI_0933.MOV", "DJI_0934.MOV", 
     "DJI_0939.MOV", "DJI_0940.MOV", 
-    #"DJI_0943.MOV", "DJI_0944.MOV"
+    "DJI_0943.MOV", "DJI_0944.MOV"
 ]
 
 RELEVANT_VIDEO = "DJI_0933.MOV"
@@ -62,7 +63,7 @@ RELEVANT_VIDEO = "DJI_0933.MOV"
 # #############################################################################
 # 1. Filtering
 # #############################################################################
-if COMPARE_FILTERING:
+if COMPARE_RECONSTRUCTION:
     df = pd.read_csv(DATA_ROOT + RELEVANT_VIDEO + ".txt", sep=",")
     df = plot_accelerations(df)
     plt.close()
@@ -124,16 +125,17 @@ if COMPARE_FILTERING:
 # """
 Analysis_df = None
 for video in ALL_VIDEOS:
-    df = pd.read_csv(DATA_ROOT + video + ".txt", sep=",")
-    df = plot_accelerations(df)
-    plt.close()
-    df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
-    print(video)
-    if video == "DJI_0940.MOV":
-        df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=6540, relax_accel_cnst=False, weight_speed_noise=10.0)
-    else:
-        df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
-    df_reconst_traj.to_csv(RCSN_ROOT + video + "_norelax.txt", index=False)
+    if RUN_RECONSTRUCTION:
+        df = pd.read_csv(DATA_ROOT + video + ".txt", sep=",")
+        df = plot_accelerations(df)
+        plt.close()
+        df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
+        print(video)
+        if video == "DJI_0940.MOV":
+            df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=6540, relax_accel_cnst=False, weight_speed_noise=10.0)
+        else:
+            df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
+        df_reconst_traj.to_csv(RCSN_ROOT + video + "_norelax.txt", index=False)
 
     df = pd.read_csv(RCSN_ROOT + video + "_norelax.txt", sep=",")
     df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
@@ -203,7 +205,7 @@ sns.catplot(data=Analysis_df, kind="bar", x="Video", y="L2gain", hue="Powertrain
 sns.catplot(data=Analysis_df, kind="bar", x="Video", y="LinfGain", hue="Powertrain",
             palette=default_plotting_settings["color_palette"])
 plt.show()
-# sys.exit(1)
+sys.exit(1)
 # """
 
 # #############################################################################
