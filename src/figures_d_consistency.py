@@ -5,6 +5,29 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.gridspec as gridspec
 
+from matplotlib.patches import Rectangle
+
+
+def add_subplot_axes(ax, rect, facecolor='w'):
+    fig = plt.gcf()
+    box = ax.get_position()
+    width = box.width
+    height = box.height
+    inax_position  = ax.transAxes.transform(rect[0:2])
+    transFigure = fig.transFigure.inverted()
+    infig_position = transFigure.transform(inax_position)    
+    x = infig_position[0]
+    y = infig_position[1]
+    width *= rect[2]
+    height *= rect[3]
+    subax = fig.add_axes([x,y,width,height],facecolor=facecolor)
+    x_labelsize = subax.get_xticklabels()[0].get_size()
+    y_labelsize = subax.get_yticklabels()[0].get_size()
+    x_labelsize *= rect[2]**0.5
+    y_labelsize *= rect[3]**0.5
+    subax.xaxis.set_tick_params(labelsize=x_labelsize)
+    subax.yaxis.set_tick_params(labelsize=y_labelsize)
+    return subax
 
 
 data_obb_x = [ "CFA", "REDET", "ROI_TRANS", "S2A", 
@@ -82,23 +105,38 @@ plt.ylim(0, 500)
 
 plt.subplot(gs[1, 0])
 plt.grid(zorder=0)
-plt.gca().set_aspect('equal', adjustable='box')
-plt.xlabel("Coordinate X [m]")
-plt.ylabel("Coordinate Y [m]")
+ax = plt.gca()
+ax.set_aspect('equal', adjustable='box')
+ax.set_xlabel("Coordinate X [m]")
+ax.set_ylabel("Coordinate Y [m]")
+en = np.random.random()*2
+ax.add_patch(
+    Rectangle(xy=(-20, 22.5), width=5, height=5, edgecolor = 'black', fill=False, lw=1)
+)
+subpos = [-0.15, 0.45, 0.4, 0.4]
+subax = add_subplot_axes(ax, subpos)
 for vehID in df_obb["Vehicle_ID"].unique():
     df_vehicle = df_obb[df_obb["Vehicle_ID"]==vehID]
     n = 1000
-    plt.plot(df_vehicle["Cartesian_X"].iloc[0:n]+np.random.random()*2, df_vehicle["Cartesian_Y"].iloc[0:n]+np.random.random()*2)
+    cart_x, cart_y = df_vehicle["Cartesian_X"].to_numpy()[0:n]+en, df_vehicle["Cartesian_Y"].to_numpy()[0:n]+en
+    ax.plot(cart_x, cart_y)
+    idxs = np.argwhere((cart_x >=-20) & (cart_x <= -15))
+    if len(idxs) > 0:
+        subax.plot(cart_x[idxs], cart_y[idxs])
+subax.set_ylim([22.5, 27.5])
+subax.grid()
+
 
 plt.subplot(gs[1, 1])
 plt.grid(zorder=0)
 plt.xlabel("Time [s]")
-plt.ylabel("Lane Coordinate Y [m]")
+plt.ylabel("Coordinate X [m]")
 for vehID in df_obb["Vehicle_ID"].unique():
     df_vehicle = df_obb[df_obb["Vehicle_ID"]==vehID]
     plt.plot(df_vehicle["Global_Time"], df_vehicle["Lane_X"])
 plt.xlim(0,150)
 plt.ylim(0, 500)
+
 
 gs_right = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[0, 2], height_ratios=[1, 3], hspace=0.05)
 ax1 = fig.add_subplot(gs_right[0])
@@ -154,5 +192,5 @@ ax2.set_xticklabels(data_obb_x, rotation=45, ha='right')
 ax2.tick_params(axis='x', rotation=45)
 
 plt.tight_layout()
-
+plt.show()
 
