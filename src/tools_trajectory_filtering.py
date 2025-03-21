@@ -38,7 +38,8 @@ from _constants import FILTERING_SAMPLING_FREQUENCY, VEHICLE_INFO_PATH
 def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: Optional[PPoly] = None, decel_min_spl: Optional[PPoly] = None, 
                                     vehicle_info_df: Optional[pd.DataFrame] = None,
                                     recon_window: float = 10.0, recon_step: float = 8.0, end_frame: Optional[int] = None,
-                                    weight_speed_noise: Optional[float] = 1.0, relax_accel_cnst: bool = True) -> pd.DataFrame:
+                                    weight_speed_noise: Optional[float] = 1.0, relax_accel_cnst: Optional[bool] = True,
+                                    include_jerk_cnst: Optional[bool] = False) -> pd.DataFrame:
     """
     This method performs traectory reconstruction/filtering through a constrained optimization problem.
     Each vehicle trajectory is filtered by windowing for a specific time period and then stepping through to the next.
@@ -64,6 +65,8 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
             Weight for objective function, specifically the term responsible for speed noise reduction
         relax_accel_cnst: bool = True
             Whether to relax the acceleration constraints or not
+        include_jerk_cnst: Optional[bool] = False
+            Whether to include jerk constraints or not.
 
     
     Returns:
@@ -162,6 +165,12 @@ def reconstruct_trajectories_cvxopt(trajectory_df: pd.DataFrame, accel_max_spl: 
                     cp.sum(v_recon)/FILTERING_SAMPLING_FREQUENCY == x_noised[-1] - x_noised[0],
                     a_recon - a_min >= 0,
                     a_recon - a_max <= 0,
+                ]
+            if include_jerk_cnst:
+                j_recon = cp.diff(a_recon, k=1) * FILTERING_SAMPLING_FREQUENCY
+                cnst += [
+                    j_recon >= -10,
+                    j_recon <= 10
                 ]
             if vehicle_id != last_vehicle:
                 x_lead = lead_position[k:k+w_recon+1]

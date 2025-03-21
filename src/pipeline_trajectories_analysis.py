@@ -41,14 +41,14 @@ import _constants as cs
 # CONSTANTS
 # #############################################################################
 COMPARE_RECONSTRUCTION = False
-RUN_RECONSTRUCTION = False
+RUN_RECONSTRUCTION = True
 
 DATA_ROOT = "../data_trajectories/6_final_trajectories/"
 RCSN_ROOT = "../data_trajectories/7_final_trajectories_reconstructed/"
 
 ALL_VIDEOS = [
-    "DJI_0933.MOV", "DJI_0934.MOV", 
-    "DJI_0939.MOV", "DJI_0940.MOV", 
+    #"DJI_0933.MOV", "DJI_0934.MOV", 
+    #"DJI_0939.MOV", "DJI_0940.MOV", 
     "DJI_0943.MOV", "DJI_0944.MOV"
 ]
 
@@ -132,12 +132,12 @@ for video in ALL_VIDEOS:
         df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
         print(video)
         if video == "DJI_0940.MOV":
-            df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=6540, relax_accel_cnst=False, weight_speed_noise=10.0)
+            df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=6540, relax_accel_cnst=False, weight_speed_noise=10.0, include_jerk_cnst=True)
         else:
-            df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
-        df_reconst_traj.to_csv(RCSN_ROOT + video + "_norelax.txt", index=False)
+            df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0, include_jerk_cnst=True)
+        df_reconst_traj.to_csv(RCSN_ROOT + video + "_norelax_withJerk.txt", index=False)
 
-    df = pd.read_csv(RCSN_ROOT + video + "_norelax.txt", sep=",")
+    df = pd.read_csv(RCSN_ROOT + video + "_norelax_withJerk.txt", sep=",")
     df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
     
     L2gains_df = estimate_L2gain_CTHpolicy(df, start_frame=250, end_frame=df["Frame_ID"].max()-250)

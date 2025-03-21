@@ -155,7 +155,7 @@ def estimate_L2gain_CTHpolicy(trajectory_df: pd.DataFrame, start_frame: Optional
     
     standstill_distance = 2.0
     unique_vehicles = trajectory_df["Vehicle_ID"].unique()
-    gammaSquared = {}
+    gammaSquaredVel, gammaSquaredSpHdwy = {}, {}
     for vehicle_id in unique_vehicles:
         vehicle_df = trajectory_df[(trajectory_df["Vehicle_ID"] == vehicle_id) & (trajectory_df["Frame_ID"] >= start_frame) & (trajectory_df["Frame_ID"] <= end_frame)].copy()
         if not vehicle_df["Frame_ID"].is_monotonic_increasing:
@@ -165,17 +165,30 @@ def estimate_L2gain_CTHpolicy(trajectory_df: pd.DataFrame, start_frame: Optional
         prec_vehicle_df = trajectory_df[(trajectory_df["Vehicle_ID"] == prec_vehicle_id) & (trajectory_df["Frame_ID"] >= start_frame) & (trajectory_df["Frame_ID"] <= end_frame)].copy()
         if not prec_vehicle_df["Frame_ID"].is_monotonic_increasing:
             prec_vehicle_df = prec_vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
+
+        prec_prec_vehicle_id = prec_vehicle_df["Proceeding"].unique()[0]
+        prec_prec_vehicle_df = trajectory_df[(trajectory_df["Vehicle_ID"] == prec_prec_vehicle_id) & (trajectory_df["Frame_ID"] >= start_frame) & (trajectory_df["Frame_ID"] <= end_frame)].copy()
+        if not prec_prec_vehicle_df["Frame_ID"].is_monotonic_increasing:
+            prec_prec_vehicle_df = prec_prec_vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
         
         Leader_Velocity = prec_vehicle_df["v_Vel"].to_numpy()
         Ego_Velocity = vehicle_df["v_Vel"].to_numpy()
         Space_Hdwy = vehicle_df["Space_Hdwy"].to_numpy()
+        Prec_Space_Hdwy = prec_vehicle_df["Space_Hdwy"].to_numpy()
+        Prec_Leader_Velocity = prec_prec_vehicle_df["v_Vel"].to_numpy()
 
         Vel_Eq = _get_equilibrium_velocity(Leader_Velocity)
+        Prec_Vel_Eq = _get_equilibrium_velocity(Prec_Leader_Velocity)
 
         vehicle_length = vehicle_df["v_Length"].unique()[0]
         Time_Gap = (Space_Hdwy - vehicle_length - standstill_distance) / Ego_Velocity
         timeGap_Eq = np.median(Time_Gap)
         Space_Hdwy_Eq = vehicle_length + standstill_distance + timeGap_Eq * Vel_Eq
+
+        prec_vehicle_length = prec_vehicle_df["v_Length"].unique()[0]
+        Prec_Time_Gap = (Prec_Space_Hdwy - prec_vehicle_length - standstill_distance) / Leader_Velocity
+        prec_timeGap_Eq = np.median(Prec_Time_Gap)
+        Prec_Space_Hdwy_Eq = prec_vehicle_length + standstill_distance + prec_timeGap_Eq * Prec_Vel_Eq
 
         m = int(0.001*len(Leader_Velocity))
         gain_est = cp.Variable()
@@ -188,10 +201,27 @@ def estimate_L2gain_CTHpolicy(trajectory_df: pd.DataFrame, start_frame: Optional
         obj = gain_est
         prob = cp.Problem(cp.Minimize(obj), cnst)
         prob.solve(solver=cp.MOSEK)
-        gammaSquared[vehicle_id] = gain_est.value.item()
+        gammaSquaredVel[vehicle_id] = gain_est.value.item()
+
+        gain_est = cp.Variable()
+        _, Ru = _get_correlation_matrix(Prec_Space_Hdwy-Prec_Space_Hdwy_Eq, m)
+        _, Ry = _get_correlation_matrix(Space_Hdwy-Space_Hdwy_Eq, m)
+        cnst = [
+            Ry - gain_est*Ru <= 0,
+            gain_est >= 0
+        ]
+        obj = gain_est
+        prob = cp.Problem(cp.Minimize(obj), cnst)
+        prob.solve(solver=cp.MOSEK)
+        gammaSquaredSpHdwy[vehicle_id] = gain_est.value.item()
     
-    gammaSquared = pd.DataFrame(gammaSquared.items(), columns=["Vehicle_ID", "gammaSquared"])
-    gammaSquared["L2gain"] = np.sqrt(gammaSquared["gammaSquared"])
+    gammaSquaredVel = pd.DataFrame(gammaSquaredVel.items(), columns=["Vehicle_ID", "gammaSquared_Speed"])
+    gammaSquaredVel["L2gain_Speed"] = np.sqrt(gammaSquaredVel["gammaSquared_Speed"])
+
+    gammaSquaredSpHdwy = pd.DataFrame(gammaSquaredSpHdwy.items(), columns=["Vehicle_ID", "gammaSquared_SpaceHdwy"])
+    gammaSquaredSpHdwy["L2gain_SpaceHdwy"] = np.sqrt(gammaSquaredSpHdwy["gammaSquared_SpaceHdwy"])
+
+    gammaSquared = gammaSquaredVel.merge(gammaSquaredSpHdwy, on=["Vehicle_ID"], how="left")
     return gammaSquared
 
 
