@@ -68,11 +68,12 @@ axs[1].set_xlabel("Time [s]")
 axs[1].set_ylabel("Lane-Coordinate Position [m]")
 axs[1].set_title("(b) DJI_0944", fontweight="bold")
 
-labels = [f"V_{l}" for l in labels]
-fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(.5, -0.05), ncol=15, fontsize="small")
+#labels = [f"V_{l}" for l in labels]
+#fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(.5, -0.05), ncol=15, fontsize="small")
 fig.tight_layout()
-fig.savefig(f"./fig_i_TSDsnippet.pdf", bbox_inches='tight', dpi=100)
-
+#fig.savefig(f"./fig_i_TSDsnippet.pdf", bbox_inches='tight', dpi=100)
+plt.show()
+sys.exit(1)
 
 ###################################################################################
 # Main: Figure 11

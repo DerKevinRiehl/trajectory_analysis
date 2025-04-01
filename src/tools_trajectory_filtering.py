@@ -13,6 +13,7 @@ Submitted to:   JOURNAL
 # #############################################################################
 import os
 import sys
+import pywt
 import pickle
 import warnings
 warnings.filterwarnings("ignore")
@@ -22,11 +23,11 @@ import pandas as pd
 import cvxpy as cp
 
 from scipy import signal
-from scipy.interpolate import CubicSpline
 from scipy.interpolate._interpolate import PPoly
 from scipy.integrate import cumulative_simpson
 from scipy.optimize import isotonic_regression
 from numpy.lib.stride_tricks import sliding_window_view
+from localreg import localreg, rbf
 from typing import Optional
 
 from _constants import FILTERING_SAMPLING_FREQUENCY, VEHICLE_INFO_PATH
@@ -430,3 +431,131 @@ def apply_physics_informed_butterworth_filter(trajectory_df: pd.DataFrame, vehic
     filtered_trajectory_df = filtered_trajectory_df.drop(columns=["Region"])
     filtered_trajectory_df = _recompute_headways(filtered_trajectory_df)
     return filtered_trajectory_df
+
+
+# #############################################################################
+# METHODS: Wavelet Transform Based Filtering
+# #############################################################################
+def _wavelet_decomp(time, signal, wavelet, num_level, mode):
+    coeffs = pywt.wavedec(signal, wavelet, level=num_level, mode=mode)
+    approx_coeffs = [coeffs[j] if j == 0 else np.zeros_like(coeffs[j]) for j in range(len(coeffs))]
+    fA = pywt.waverec(approx_coeffs, wavelet, mode=mode)[:len(time)]
+    fD = []
+    for i in range(1, num_level+1):
+        detail_coeffs = [coeffs[j] if j == i else np.zeros_like(coeffs[j]) for j in range(len(coeffs))]
+        fD.append(pywt.waverec(detail_coeffs, wavelet, mode=mode)[:len(time)])
+    return coeffs[0], coeffs[1:], fA, fD
+
+
+def reconstruct_trajectories_wavelet(
+        trajectory_df: pd.DataFrame, wavelet_mode: Optional[str] = 'smooth', soft_thresholding: Optional[bool] = False
+        ) -> pd.DataFrame:
+    reconstructed_trajectory_df = None
+
+    unique_vehicles = trajectory_df["Vehicle_ID"].unique()
+    for vehicle_id in unique_vehicles:
+        vehicle_df = trajectory_df[trajectory_df["Vehicle_ID"] == vehicle_id].copy()
+        if not vehicle_df["Frame_ID"].is_monotonic_increasing:
+            vehicle_df = vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
+        vehicle_df = vehicle_df.reset_index().drop(columns=["index"])
+
+        time = vehicle_df["Global_Time"].to_numpy()
+        position = vehicle_df["Lane_X"].to_numpy()
+
+        # Step 1: Outlier Detection and Modification
+        w = "sym8"
+        level = 1
+        _, cD, _, fD = _wavelet_decomp(time, position, w, level, wavelet_mode)
+        cD, fD =  cD[0], fD[0]
+        cD_mean, cD_std = np.mean(cD), np.std(cD)
+        cD_min, cD_max = cD_mean - 1.96*cD_std, cD_mean + 1.96*cD_std
+        #print(f"{np.amin(cD):.4f}, {np.amax(cD):.4f}, {cD_min:.4f}, {cD_max:.4f}")
+        cD_outlier_idxs = np.argwhere((cD < cD_min) | (cD > cD_max)).flatten()
+        cD[cD_outlier_idxs] = 0.0
+        fD_outlier = pywt.idwt(None, cD, wavelet=w, mode=wavelet_mode)[:len(time)]
+        #fD_outlier = pywt.idwt(None, np.clip(cD, cD_min, cD_max), wavelet=w, mode=wavelet_mode)[:len(time)]
+        outlier_idxs = np.argwhere(abs(fD_outlier - fD) >= 1e-02) #10**np.floor(np.log10(cD_max/2))
+        position_filtered = np.copy(position)
+        remaining_outliers = np.copy(outlier_idxs).flatten()
+
+        import matplotlib.pyplot as plt
+
+        while len(remaining_outliers) > 0:
+            o_idx = remaining_outliers[0]
+            start_idx = max(0, int(o_idx - 1.5*FILTERING_SAMPLING_FREQUENCY))
+            end_idx = min(len(time)-1, int(o_idx + 1.5*FILTERING_SAMPLING_FREQUENCY)) + 1
+            X, y = time[start_idx:end_idx], position_filtered[start_idx:end_idx]
+
+            y_pred = localreg(X, y, degree=3, kernel=rbf.gaussian, radius=1)
+            incl_o_idxs = remaining_outliers[np.argwhere((remaining_outliers >= start_idx) & (remaining_outliers <= end_idx))[:, 0]].flatten()
+            if len(incl_o_idxs) > 1:
+                position_filtered[start_idx:end_idx] = y_pred
+            else:
+                #position_filtered[o_idx] = y_pred[o_idx-start_idx]
+                abs_pos_diff = abs(position_filtered[start_idx:end_idx]-y_pred)
+                idx0 = np.argmin(abs_pos_diff[:o_idx-start_idx])
+                idx1 = np.argmin(abs_pos_diff[o_idx-start_idx+1:]) + o_idx-start_idx
+                position_filtered[start_idx+idx0:start_idx+idx1] = y_pred[idx0:idx1]
+            """
+            plt.figure()
+            plt.scatter(time[start_idx:end_idx], position[start_idx:end_idx], label="Raw")
+            plt.scatter(time[incl_o_idxs], position[incl_o_idxs], label="Outliers")
+            plt.plot(time[start_idx:end_idx], position_filtered[start_idx:end_idx], label="Step 1", color='red')
+            plt.plot(time[start_idx:end_idx], y_pred, label="Step 1 Y-Pred", color='black', linestyle='dashed')
+            plt.legend()
+            plt.show()
+            """
+            remaining_outliers = np.setdiff1d(remaining_outliers, incl_o_idxs)
+
+        (_, cD_s1) = pywt.dwt(position_filtered, wavelet=w)
+        #fA_s1 = pywt.idwt(cA_s1, None, wavelet=w, mode=wavelet_mode)[:len(time)]
+        fD_s1 = pywt.idwt(None, cD_s1, wavelet=w, mode=wavelet_mode)[:len(time)]
+        print(vehicle_id)
+        speed_raw = np.diff(position, n=1)*FILTERING_SAMPLING_FREQUENCY
+        accel_raw = np.diff(speed_raw, n=1)*FILTERING_SAMPLING_FREQUENCY
+        print(f"Raw: Details Function range [{np.amin(fD):.3f}, {np.amax(fD):.3f}], Acceleration range [{np.amin(accel_raw):.3f}, {np.amax(accel_raw):.3f}]")
+        speed_filtered = np.diff(position_filtered, n=1)*FILTERING_SAMPLING_FREQUENCY
+        accel_filtered = np.diff(speed_filtered, n=1)*FILTERING_SAMPLING_FREQUENCY
+        print(f"Step 1: Details Function range [{np.amin(fD_s1):.3f}, {np.amax(fD_s1):.3f}], Acceleration range [{np.amin(accel_filtered):.3f}, {np.amax(accel_filtered):.3f}]")
+        #sys.exit(1)
+
+        # Step 2: Noise Reduction
+        w = "haar"
+        level = 3
+        cA_s2, cD_s2, _, _ = _wavelet_decomp(time, position_filtered, w, level, wavelet_mode)
+        for i in range(level):
+            level_noise_var = np.median(cD_s2[i]) / 0.6745
+            level_threshold = abs(level_noise_var * np.sqrt(2*np.log(len(cD_s2[i]))))
+            cD_s2[i][abs(cD_s2[i]) <= level_threshold] = 0
+            if soft_thresholding:
+                cD_s2[i][abs(cD_s2[i]) > level_threshold] = np.sign(cD_s2[i][abs(cD_s2[i]) > level_threshold]) * (np.abs(cD_s2[i][abs(cD_s2[i]) > level_threshold]) - level_threshold)
+        position_recon = pywt.waverec([cA_s2]+cD_s2, wavelet=w, mode=wavelet_mode)[:len(time)]
+        position_recon = localreg(time, position_recon, degree=5, kernel=rbf.gaussian, radius=0.8)
+        position_recon[0] = position[0]
+
+        vehicle_df["Lane_X"] = position_recon
+        if not vehicle_df["Lane_X"].is_monotonic_increasing:
+            res = isotonic_regression(position_recon, increasing=True)
+            vehicle_df["Lane_X"] = res.x
+        vehicle_df["v_Vel"] = vehicle_df["Lane_X"].diff(1).shift(-1).fillna(0) * FILTERING_SAMPLING_FREQUENCY
+        vehicle_df["v_Accel"] = vehicle_df["v_Vel"].diff(1).shift(-1).fillna(0) * FILTERING_SAMPLING_FREQUENCY
+
+        w = "sym8"
+        level = 1
+        _, _, _, fD_s2 = _wavelet_decomp(time, position_recon, w, level, wavelet_mode)
+        print(f"Step 2: Details Function range [{np.amin(fD_s2):.3f}, {np.amax(fD_s2):.3f}], Acceleration range [{vehicle_df["v_Accel"].min():.3f}, {vehicle_df["v_Accel"].max():.3f}] \n")
+        #sys.exit(1)
+
+        if reconstructed_trajectory_df is None:
+            reconstructed_trajectory_df = vehicle_df.copy()
+        else:
+            reconstructed_trajectory_df = pd.concat((reconstructed_trajectory_df, vehicle_df))
+    print("Trajectory Reconstruction Done!")
+    reconstructed_trajectory_df = reconstructed_trajectory_df.reset_index().drop(columns=["index"])
+    if len(unique_vehicles) > 1:
+        reconstructed_trajectory_df = _recompute_headways(reconstructed_trajectory_df)
+    return reconstructed_trajectory_df
+
+
+
+

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from matplotlib import gridspec
 from matplotlib.patches import Rectangle
-from _constants import VEHICLE_INFO_PATH
+from _constants import VEHICLE_INFO_PATH, FILTERING_SAMPLING_FREQUENCY
 from tools_trajectory_plotting import plot_accelerations
 
 
@@ -96,6 +96,8 @@ vehicle_df = df[df["Vehicle_ID"] == vehicle_id]
 if not vehicle_df["Frame_ID"].is_monotonic_increasing:
     vehicle_df = vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
 vehicle_df = vehicle_df.reset_index().drop(columns=["index"])
+vehicle_df["v_Vel"] = vehicle_df["Lane_X"].diff(1).shift(-1).fillna(0) * FILTERING_SAMPLING_FREQUENCY
+vehicle_df["v_Accel"] = vehicle_df["v_Vel"].diff(1).shift(-1).fillna(0) * FILTERING_SAMPLING_FREQUENCY
 
 vehicle_df_CvxOpt = df_CvxOpt[df_CvxOpt["Vehicle_ID"] == vehicle_id]
 if not vehicle_df_CvxOpt["Frame_ID"].is_monotonic_increasing:
@@ -126,8 +128,23 @@ axs[0][0].set_xlabel("Time [s]")
 axs[0][0].set_ylabel("Speed [m/s]")
 axs[0][0].grid()
 #axs[0][0].set_xlim(0, 150)
-#axs[0][0].set_ylim(1, 5)
+axs[0][0].set_ylim(-1.5, 8)
 axs[0][0].legend(fontsize="x-small", loc="upper left")
+time_arr = vehicle_df["Global_Time"].to_numpy()
+t1, t2 = 230, 240
+t1_idx, t2_idx = np.argwhere(time_arr == t1)[0][0], np.argwhere(time_arr == t2)[0][0]
+v1 = np.amin([vehicle_df["v_Vel"].iloc[t1_idx:t2_idx], vehicle_df_CvxOpt["v_Vel"].iloc[t1_idx:t2_idx], vehicle_df_PIButterworth["v_Vel"].iloc[t1_idx:t2_idx]])-0.15
+v2 = np.amax([vehicle_df["v_Vel"].iloc[t1_idx:t2_idx], vehicle_df_CvxOpt["v_Vel"].iloc[t1_idx:t2_idx], vehicle_df_PIButterworth["v_Vel"].iloc[t1_idx:t2_idx]])+0.15
+axs[0][0].add_patch(
+    Rectangle(xy=(t1, v1), width=t2-t1, height=v2-v1, edgecolor = 'black', fill=False, lw=1)
+)
+subpos = [0.45, 0.24, 0.32, 0.32]
+subax = add_subplot_axes(axs[0][0], subpos)
+subax.plot(time_arr[t1_idx:t2_idx], vehicle_df["v_Vel"].iloc[t1_idx:t2_idx], label="Before Reconstruction", color=color_before)
+subax.plot(time_arr[t1_idx:t2_idx], vehicle_df_CvxOpt["v_Vel"].iloc[t1_idx:t2_idx], label="Proposed Reconstruction", linestyle="--", alpha=0.75, color=color_proposed)
+subax.plot(time_arr[t1_idx:t2_idx], vehicle_df_PIButterworth["v_Vel"].iloc[t1_idx:t2_idx], label="PI-Butterworth Reconstruction", linestyle="-.", alpha=0.75, color=color_pibutter)
+subax.grid()
+subax.set_xlim([t1, t2])
 
 axs[0][1].set_title("(a) Trajectory Variables", fontweight="bold")
 axs[0][1].plot(vehicle_df["Global_Time"], vehicle_df["Space_Hdwy"], label="Before Reconstruction", color=color_before)
@@ -147,7 +164,7 @@ axs[0][2].set_xlabel("Time [s]")
 axs[0][2].set_ylabel("Acceleration [m/s$^2$]")
 axs[0][2].grid()
 #axs[0][2].set_xlim(0,150)
-#axs[0][2].set_ylim(-4,4)
+axs[0][2].set_ylim(-5,10)
 
 axs[1][0].set_title("                                                            (b) Lane-Coordinate Positions", fontweight="bold")
 axs[1][0].plot(vehicle_df["Global_Time"], vehicle_df["Lane_X"]-vehicle_df["Lane_X"].iloc[0], label="Before Reconstruction", color=color_before)
@@ -200,13 +217,14 @@ axs[1][2].grid()
 axs[1][2].set_xlabel("Speed [m/s]")
 axs[1][2].set_ylabel("Acceleration [m/s$^2$]")
 axs[1][2].legend(fontsize="x-small", loc="upper left")
-axs[1][2].set_ylim(-4, 11)
+axs[1][2].set_ylim(-6, 14)
+axs[1][2].set_xlim(v_min, v_max)
 axs[1][2].yaxis.set_major_locator(plt.MultipleLocator(2))
 
 fig.tight_layout()
 plt.show()
 #fig.savefig(f"./ReconstructionComparison_{RELEVANT_VIDEO}_{vehicle_id}.pdf", bbox_inches='tight', dpi=100)
-#sys.exit(1)
+sys.exit(1)
 
 
 ###################################################################################
@@ -269,8 +287,8 @@ axs[2].set_xlabel("Time [s]")
 axs[2].set_ylabel("")
 axs[2].set_title("(c) PI-Butterworth Reconstruction", fontweight="bold")
 
-labels = [f"V_{l}" for l in labels]
-fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(.5, -0.05), ncol=14, fontsize="small")
+#labels = [f"V_{l}" for l in labels]
+#fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(.5, -0.05), ncol=14, fontsize="small")
 fig.tight_layout()
 #fig.savefig(f"./ReconstructionComparison_{RELEVANT_VIDEO}_ObliqueTrajectories.pdf", bbox_inches='tight', dpi=100)
 plt.show()

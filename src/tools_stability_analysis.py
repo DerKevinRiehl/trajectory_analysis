@@ -23,32 +23,14 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from typing import Optional, Tuple
+from scipy.ndimage import shift
+
+from _constants import FILTERING_SAMPLING_FREQUENCY
 
 
 # #############################################################################
 # METHODS
 # #############################################################################
-"""
-def filter_trajectories_ema(trajectory_df:pd.DataFrame, alpha: float) -> pd.DataFrame:
-    unique_vehicles = trajectory_df["Vehicle_ID"].unique()
-    mod_trajectory_df = None
-    for vehicle_id in unique_vehicles:
-        vehicle_df = trajectory_df[trajectory_df["Vehicle_ID"] == vehicle_id].copy()
-        if not vehicle_df["Frame_ID"].is_monotonic_increasing:
-            vehicle_df = vehicle_df.sort_values(by=["Frame_ID"])
-        sampling_interval = vehicle_df["Global_Time"].diff(1).mean()
-        vehicle_df["v_Vel"] = vehicle_df["Lane_X"].diff(1).shift(-1).fillna(0) / sampling_interval
-        vehicle_df["v_Vel_ema"] = vehicle_df["v_Vel"].ewm(alpha=alpha, adjust=False).mean()
-        vehicle_df["v_Vel"] = vehicle_df["v_Vel_ema"]
-        vehicle_df = vehicle_df.drop(columns=["v_Vel_ema"])
-        vehicle_df["Time_Hdwy"] = vehicle_df["Space_Hdwy"] / vehicle_df["v_Vel"]
-        if mod_trajectory_df is None:
-            mod_trajectory_df = vehicle_df.copy()
-        else:
-            mod_trajectory_df = pd.concat((mod_trajectory_df, vehicle_df))
-    return mod_trajectory_df
-"""
-
 def speed_standard_deviation(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0) -> pd.DataFrame:
     first_vehicle_idx = trajectory_df.loc[trajectory_df["Frame_ID"] == start_frame, "Lane_X"].idxmin()
     vehicle_id = trajectory_df.loc[first_vehicle_idx, "Vehicle_ID"]
@@ -258,3 +240,35 @@ def estimate_LinfinityGain_CTHpolicy(trajectory_df: pd.DataFrame, start_frame: O
     
     LinfinityGain = pd.DataFrame(LinfinityGain.items(), columns=["Vehicle_ID", "LinfGain"])
     return LinfinityGain
+
+
+def compute_response_time(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None,
+                          Tmax: Optional[float] = 5.0, dtau: Optional[float] = 0.1):
+    if end_frame is None:
+        end_frame = trajectory_df["Frame_ID"].max()
+    unique_vehicles = trajectory_df["Vehicle_ID"].unique()
+    responseTimes = {}
+    for vehicle_id in unique_vehicles:
+        vehicle_df = trajectory_df[(trajectory_df["Vehicle_ID"] == vehicle_id) & (trajectory_df["Frame_ID"] >= start_frame) & (trajectory_df["Frame_ID"] <= end_frame)].copy()
+        if not vehicle_df["Frame_ID"].is_monotonic_increasing:
+            vehicle_df = vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
+
+        prec_vehicle_id = vehicle_df["Proceeding"].unique()[0]
+        prec_vehicle_df = trajectory_df[(trajectory_df["Vehicle_ID"] == prec_vehicle_id) & (trajectory_df["Frame_ID"] >= start_frame) & (trajectory_df["Frame_ID"] <= end_frame)].copy()
+        if not prec_vehicle_df["Frame_ID"].is_monotonic_increasing:
+            prec_vehicle_df = prec_vehicle_df.sort_values(by=["Frame_ID"], ascending=True)
+        
+        Leader_Velocity = prec_vehicle_df["v_Vel"].to_numpy()
+        Ego_Velocity = vehicle_df["v_Vel"].to_numpy()
+        Ego_Accel = vehicle_df["v_Accel"].to_numpy()
+
+        taus = np.arange(0, Tmax+dtau, dtau)
+        correl = np.zeros(shape=(len(taus),))
+        for i in range(len(taus)):
+            Speed_Diff_Delayed = shift(Leader_Velocity - Ego_Velocity, int(taus[i]*FILTERING_SAMPLING_FREQUENCY))
+            correl[i] = np.correlate(Ego_Accel, Speed_Diff_Delayed)
+        max_idx = np.argmax(correl)
+        responseTimes[vehicle_id] = taus[max_idx]
+    
+    responseTimes = pd.DataFrame(responseTimes.items(), columns=["Vehicle_ID", "Response_Time"])
+    return responseTimes

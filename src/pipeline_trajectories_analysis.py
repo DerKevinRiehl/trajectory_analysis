@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 
 from tools_trajectory_filtering import reconstruct_trajectories_cvxopt
 from tools_trajectory_filtering import apply_physics_informed_butterworth_filter
+from tools_trajectory_filtering import reconstruct_trajectories_wavelet
 
 from tools_trajectory_plotting import plot_time_space_diagram
 from tools_trajectory_plotting import plot_oblique_trajectories
@@ -32,7 +33,7 @@ from tools_trajectory_plotting import plot_velocities_and_headways
 from tools_trajectory_plotting import plot_accelerations
 
 from tools_stability_analysis import estimate_L2gain_CTHpolicy, estimate_LinfinityGain_CTHpolicy
-from tools_stability_analysis import speed_standard_deviation, speed_dft
+from tools_stability_analysis import speed_standard_deviation, speed_dft, compute_response_time
 
 from _constants import default_plotting_settings
 import _constants as cs
@@ -40,15 +41,15 @@ import _constants as cs
 # #############################################################################
 # CONSTANTS
 # #############################################################################
-COMPARE_RECONSTRUCTION = False
-RUN_RECONSTRUCTION = True
+COMPARE_RECONSTRUCTION = True
+RUN_RECONSTRUCTION = False
 
 DATA_ROOT = "../data_trajectories/6_final_trajectories/"
 RCSN_ROOT = "../data_trajectories/7_final_trajectories_reconstructed/"
 
 ALL_VIDEOS = [
-    #"DJI_0933.MOV", "DJI_0934.MOV", 
-    #"DJI_0939.MOV", "DJI_0940.MOV", 
+    "DJI_0933.MOV", "DJI_0934.MOV", 
+    "DJI_0939.MOV", "DJI_0940.MOV", 
     "DJI_0943.MOV", "DJI_0944.MOV"
 ]
 
@@ -76,10 +77,12 @@ if COMPARE_RECONSTRUCTION:
     df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + RELEVANT_VIDEO + ".txt", sep="\t")
     #print(df_info)
     
-    df_CvxOpt = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
-    df_PIButterworth = apply_physics_informed_butterworth_filter(df, vehicle_info_df=df_info)
-    df_CvxOpt.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_CvxOptNoRelax.txt", index=False)
-    df_PIButterworth.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_PIButterworth.txt", index=False)
+    #df_CvxOpt = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
+    #df_PIButterworth = apply_physics_informed_butterworth_filter(df, vehicle_info_df=df_info)
+    df_Wavelet = reconstruct_trajectories_wavelet(df, soft_thresholding=False)
+    #df_CvxOpt.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_CvxOptNoRelax.txt", index=False)
+    #df_PIButterworth.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_PIButterworth.txt", index=False)
+    df_Wavelet.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_Wavelet.txt", index=False)
     
 
     from tools_trajectory_evaluation import calculateInternalConsistency
@@ -95,7 +98,7 @@ if COMPARE_RECONSTRUCTION:
     print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
     print(vals_violation, total_vehicle_frames)
 
-
+    """
     print("\n\n")
     print("*********************** RECONSTRUCTION: CVXOPT ***********************")
     e_i_max, e_i_min, e_i_avg, e_i_std, distance_travelled = calculateInternalConsistency(df_CvxOpt, cs.FILTERING_SAMPLING_FREQUENCY)
@@ -111,6 +114,17 @@ if COMPARE_RECONSTRUCTION:
     e_i_max, e_i_min, e_i_avg, e_i_std, distance_travelled = calculateInternalConsistency(df_PIButterworth, cs.FILTERING_SAMPLING_FREQUENCY)
     e_p_max, e_p_min, e_p_avg, e_p_std = calculatePlatoonConsistency_Headway(df_PIButterworth, cs.FILTERING_SAMPLING_FREQUENCY)
     vals_violation, total_vehicle_frames = calculatePlatoonConsistency_PhysicalValidHeadway(df_PIButterworth)
+    print(f"Internal Consistency Error: Avg = {e_i_avg}, Std = {e_i_std}, Max = {e_i_max}, Min = {e_i_min}.")
+    print(f"Distance Travelled = {distance_travelled}")
+    print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
+    print(vals_violation, total_vehicle_frames)
+    """
+
+    print("\n\n")
+    print("*********************** RECONSTRUCTION: Wavelet Transform ***********************")
+    e_i_max, e_i_min, e_i_avg, e_i_std, distance_travelled = calculateInternalConsistency(df_Wavelet, cs.FILTERING_SAMPLING_FREQUENCY)
+    e_p_max, e_p_min, e_p_avg, e_p_std = calculatePlatoonConsistency_Headway(df_Wavelet, cs.FILTERING_SAMPLING_FREQUENCY)
+    vals_violation, total_vehicle_frames = calculatePlatoonConsistency_PhysicalValidHeadway(df_Wavelet)
     print(f"Internal Consistency Error: Avg = {e_i_avg}, Std = {e_i_std}, Max = {e_i_max}, Min = {e_i_min}.")
     print(f"Distance Travelled = {distance_travelled}")
     print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
@@ -132,22 +146,24 @@ for video in ALL_VIDEOS:
         df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
         print(video)
         if video == "DJI_0940.MOV":
-            df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=6540, relax_accel_cnst=False, weight_speed_noise=10.0, include_jerk_cnst=True)
+            df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=6540, relax_accel_cnst=False, weight_speed_noise=10.0)
         else:
-            df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0, include_jerk_cnst=True)
-        df_reconst_traj.to_csv(RCSN_ROOT + video + "_norelax_withJerk.txt", index=False)
+            df_reconst_traj = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
+        df_reconst_traj.to_csv(RCSN_ROOT + video + "_norelax.txt", index=False)
 
-    df = pd.read_csv(RCSN_ROOT + video + "_norelax_withJerk.txt", sep=",")
+    df = pd.read_csv(RCSN_ROOT + video + "_norelax.txt", sep=",")
     df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + video + ".txt", sep="\t")
     
     L2gains_df = estimate_L2gain_CTHpolicy(df, start_frame=250, end_frame=df["Frame_ID"].max()-250)
     LinfGains_df = estimate_LinfinityGain_CTHpolicy(df, start_frame=250, end_frame=df["Frame_ID"].max()-250)
     speed_std_df = speed_standard_deviation(df)
     dft_df = speed_dft(df)
+    tau_df = compute_response_time(df, start_frame=250, end_frame=df["Frame_ID"].max()-250, dtau=0.04)
 
     exp_df = L2gains_df.merge(speed_std_df, on=["Vehicle_ID"], how="left")
     exp_df = exp_df.merge(LinfGains_df, on=["Vehicle_ID"], how="left")
     exp_df = exp_df.merge(dft_df, on=["Vehicle_ID"], how="left")
+    exp_df = exp_df.merge(tau_df, on=["Vehicle_ID"], how="left")
     exp_df = exp_df.merge(df_info, on=["Vehicle_ID"], how="left")
     exp_df["Video"] = video
     exp_df = exp_df.sort_values(by=["Vehicle_Rank"]).reset_index()
@@ -178,7 +194,7 @@ Analysis_df["Vehicle_Rank_Label"] = Analysis_df["Vehicle_Rank"].astype(str)
 #sys.exit(1)
 
 
-sns.catplot(data=Analysis_df, kind="bar", x="Video", y="L2gain", hue="Vehicle_ID",
+sns.catplot(data=Analysis_df, kind="bar", x="Video", y="L2gain_Speed", hue="Vehicle_ID",
             palette=default_plotting_settings["color_palette"])
 xmin, xmax = plt.gca().get_xlim()
 plt.hlines(1, xmin-1, xmax, color="red", linestyles="--")
@@ -199,11 +215,15 @@ sns.catplot(data=Analysis_df, kind="bar", x="Video", y="Max_Amplitude", hue="Veh
 sns.catplot(data=Analysis_df, kind="bar", x="Video", y="Speed_Std_Dev", hue="Powertrain",
             palette=default_plotting_settings["color_palette"])
 
-sns.catplot(data=Analysis_df, kind="bar", x="Video", y="L2gain", hue="Powertrain",
+sns.catplot(data=Analysis_df, kind="bar", x="Video", y="L2gain_Speed", hue="Powertrain",
             palette=default_plotting_settings["color_palette"])
 
 sns.catplot(data=Analysis_df, kind="bar", x="Video", y="LinfGain", hue="Powertrain",
             palette=default_plotting_settings["color_palette"])
+
+sns.catplot(data=Analysis_df, kind="bar", x="Video", y="Response_Time", hue="Powertrain",
+            palette=default_plotting_settings["color_palette"])
+
 plt.show()
 sys.exit(1)
 # """
