@@ -50,12 +50,12 @@ annotations = loadAnnotations(inference_file)
 labelled_file = trajectorized_labelled_path+RELEVANT_VIDEO+".txt"
 annotations_labelled = loadAnnotations(labelled_file)
 # HOMOGRAPHY
-df_homography = loadHomography("../data/1_homography/"+RELEVANT_VIDEO+"_circle.txt")
+df_homography = loadHomography("../data_trajectories/1_homography/"+RELEVANT_VIDEO+"_circle.txt")
 # REGION OF INTEREST
 region_of_interest = REGION_OF_INTEREST[RELEVANT_VIDEO]
 # KALMAN FILTERED
-df_kalman_vehicle_data = pd.read_csv("../data/4_kalman_filtered/"+RELEVANT_VIDEO.replace(".MOV", "")+"/"+selected_vehicle+selected_kalman+".csv")
-df_trajectory_data = pd.read_csv("../data/6_final_trajectories/"+RELEVANT_VIDEO+".txt")
+df_kalman_vehicle_data = pd.read_csv("../data_trajectories/4_kalman_filtered/"+RELEVANT_VIDEO.replace(".MOV", "")+"/"+selected_vehicle+selected_kalman+".csv")
+df_trajectory_data = pd.read_csv("../data_trajectories/6_final_trajectories/"+RELEVANT_VIDEO+".txt")
 df_trajectory_data = df_trajectory_data[df_trajectory_data["Vehicle_ID"]==selected_vehicle]
 df_space_headway = df_trajectory_data[["Frame_ID", "Space_Hdwy"]]
 

@@ -126,6 +126,7 @@ plt.gca().set_xticklabels([])
 plt.grid(zorder=0)
 plt.yscale("log")
 plt.gca().set_xticklabels([])
+plt.ylim(1.3358746602850649, 9584.731547544832)
 
 plt.subplot(2,2,3)
 plt.ylabel("Average\nGap Length [Frames]")
@@ -145,7 +146,7 @@ plt.xticks(rotation=45)
 plt.gca().set_xticklabels(data_obb_x)
 plt.grid(zorder=0)
 plt.yscale("log")
-
+plt.ylim(1.3358746602850649, 9584.731547544832)
 
 
 plt.tight_layout()

@@ -77,8 +77,9 @@ for bar in bars.patches:
         bar.set_edgecolor("white")
     counter += 1
 plt.gca().set_xticklabels([])
-plt.legend(loc='upper right',  # bbox_to_anchor=(0.5, 1.05),
-          ncol=2, fontsize=6)
+#plt.legend(loc='upper right',  # bbox_to_anchor=(0.5, 1.05),
+#          ncol=4)#, fontsize=6)
+fig.legend(bbox_to_anchor=(0.5, 1.1), loc='upper center', ncol=4)
 plt.plot([-1, 11], [14, 14], "--", color="black", alpha=0.5)
 plt.xticks(rotation=45)
 plt.gca().set_xticklabels(data_obb_x)
