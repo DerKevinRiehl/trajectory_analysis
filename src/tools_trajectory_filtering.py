@@ -433,6 +433,12 @@ def apply_physics_informed_butterworth_filter(trajectory_df: pd.DataFrame, vehic
     return filtered_trajectory_df
 
 
+def apply_naive_butterworth_filter(trajectory_df: pd.DataFrame, cutoff_freq = 0.75) -> pd.DataFrame:
+    filtered_trajectory_df = _noise_reduction_butterworth_filter(trajectory_df, cutoff_freq=cutoff_freq)
+    filtered_trajectory_df = _recompute_headways(filtered_trajectory_df)
+    return filtered_trajectory_df
+
+
 # #############################################################################
 # METHODS: Wavelet Transform Based Filtering
 # #############################################################################

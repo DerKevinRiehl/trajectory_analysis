@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 
 from tools_trajectory_filtering import reconstruct_trajectories_cvxopt
 from tools_trajectory_filtering import apply_physics_informed_butterworth_filter
+from tools_trajectory_filtering import apply_naive_butterworth_filter
 from tools_trajectory_filtering import reconstruct_trajectories_wavelet
 
 from tools_trajectory_plotting import plot_time_space_diagram
@@ -79,10 +80,12 @@ if COMPARE_RECONSTRUCTION:
     
     #df_CvxOpt = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
     #df_PIButterworth = apply_physics_informed_butterworth_filter(df, vehicle_info_df=df_info)
-    df_Wavelet = reconstruct_trajectories_wavelet(df, soft_thresholding=False)
+    df_Butterworth = apply_naive_butterworth_filter(df)
+    #df_Wavelet = reconstruct_trajectories_wavelet(df, soft_thresholding=False)
     #df_CvxOpt.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_CvxOptNoRelax.txt", index=False)
     #df_PIButterworth.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_PIButterworth.txt", index=False)
-    df_Wavelet.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_Wavelet.txt", index=False)
+    df_Butterworth.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_Butterworth.txt", index=False)
+    #df_Wavelet.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_Wavelet.txt", index=False)
     
 
     from tools_trajectory_evaluation import calculateInternalConsistency
@@ -118,13 +121,23 @@ if COMPARE_RECONSTRUCTION:
     print(f"Distance Travelled = {distance_travelled}")
     print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
     print(vals_violation, total_vehicle_frames)
-    """
 
     print("\n\n")
     print("*********************** RECONSTRUCTION: Wavelet Transform ***********************")
     e_i_max, e_i_min, e_i_avg, e_i_std, distance_travelled = calculateInternalConsistency(df_Wavelet, cs.FILTERING_SAMPLING_FREQUENCY)
     e_p_max, e_p_min, e_p_avg, e_p_std = calculatePlatoonConsistency_Headway(df_Wavelet, cs.FILTERING_SAMPLING_FREQUENCY)
     vals_violation, total_vehicle_frames = calculatePlatoonConsistency_PhysicalValidHeadway(df_Wavelet)
+    print(f"Internal Consistency Error: Avg = {e_i_avg}, Std = {e_i_std}, Max = {e_i_max}, Min = {e_i_min}.")
+    print(f"Distance Travelled = {distance_travelled}")
+    print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
+    print(vals_violation, total_vehicle_frames)
+    """
+
+    print("\n\n")
+    print("*********************** RECONSTRUCTION: Naive Butterworth ***********************")
+    e_i_max, e_i_min, e_i_avg, e_i_std, distance_travelled = calculateInternalConsistency(df_Butterworth, cs.FILTERING_SAMPLING_FREQUENCY)
+    e_p_max, e_p_min, e_p_avg, e_p_std = calculatePlatoonConsistency_Headway(df_Butterworth, cs.FILTERING_SAMPLING_FREQUENCY)
+    vals_violation, total_vehicle_frames = calculatePlatoonConsistency_PhysicalValidHeadway(df_Butterworth)
     print(f"Internal Consistency Error: Avg = {e_i_avg}, Std = {e_i_std}, Max = {e_i_max}, Min = {e_i_min}.")
     print(f"Distance Travelled = {distance_travelled}")
     print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")

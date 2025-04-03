@@ -239,8 +239,10 @@ def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optio
     return trajectory_df
 
 
-def plot_accelerations(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None) -> pd.DataFrame:
-    if not "v_Accel" in trajectory_df.columns:
+def plot_accelerations(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None, recompute_speeds: Optional[bool] = False) -> pd.DataFrame:
+    if not "v_Accel" in trajectory_df.columns or recompute_speeds:
+        if recompute_speeds:
+            trajectory_df = trajectory_df.drop(columns=['v_Vel'])
         unique_vehicles = trajectory_df["Vehicle_ID"].unique()
         accel_df = None
         for vehicle_id in unique_vehicles:
@@ -248,8 +250,13 @@ def plot_accelerations(trajectory_df: pd.DataFrame, start_frame: Optional[int] =
             if not vehicle_df["Frame_ID"].is_monotonic_increasing:
                 vehicle_df = vehicle_df.sort_values(by=["Frame_ID"])
             sampling_interval = vehicle_df["Global_Time"].diff(1).mean()
+            if recompute_speeds:
+                vehicle_df["v_Vel"] = vehicle_df["Lane_X"].diff(1).shift(-1).fillna(0) / sampling_interval
             vehicle_df["v_Accel"] = vehicle_df["v_Vel"].diff(1).shift(-1).fillna(0) / sampling_interval
-            vehicle_df = vehicle_df[["Frame_ID", "Vehicle_ID", "v_Accel"]]
+            if recompute_speeds:
+                vehicle_df = vehicle_df[["Frame_ID", "Vehicle_ID", "v_Accel", "v_Vel"]]
+            else:
+                vehicle_df = vehicle_df[["Frame_ID", "Vehicle_ID", "v_Accel"]]
             if accel_df is None:
                 accel_df = vehicle_df.copy()
             else:
