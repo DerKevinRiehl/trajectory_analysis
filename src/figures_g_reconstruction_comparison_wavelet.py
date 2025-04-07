@@ -83,11 +83,26 @@ def setup_broken_axis_boxplot(gs_cell, title, df_Pc, df_info, ylim_top, ylim_bot
     gs_sub = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs_cell, height_ratios=[1, 3], hspace=0.05)
     ax_top = fig.add_subplot(gs_sub[0])
     ax_bottom = fig.add_subplot(gs_sub[1])
-    
+
     plt.sca(ax_top)
     plt.title(title)
-    sns.boxplot(data=df_Pc[df_Pc['Pt'] > 0], x='Vehicle_ID', y='Pt', hue='Source', ax=ax_top, showfliers=True, legend=False, 
-                palette=colors, flierprops=dict(alpha=0.05), showmeans=True, meanprops=dict(markerfacecolor='white', markeredgecolor='black'))
+    plot_df = df_Pc[(df_Pc['Pt'] >= 1e-01) & (df_Pc['Pt'] - df_Pc['Pmax'] >= 1e-02)]
+    extra_df = []
+    for v_id in plot_df['Vehicle_ID'].unique():
+        extra_df.append([v_id, np.nan, np.nan, "Proposed Reconstruction"])
+    extra_df = pd.DataFrame(extra_df, columns=['Vehicle_ID', 'Pt', 'Pmax', 'Source'])
+    plot_df = pd.concat((plot_df, extra_df)).reset_index().drop(columns='index')
+    plot_df['Source'] = pd.Categorical(plot_df['Source'], categories=colors.keys(), ordered=True)
+    plot_df['Vehicle_ID'] = pd.Categorical(plot_df['Vehicle_ID'], categories=df_Pc['Vehicle_ID'].unique(), ordered=True)
+    plot_df = plot_df.sort_values(by=['Source', 'Vehicle_ID'])
+    sns.stripplot(data=plot_df, x='Vehicle_ID', y='Pmax', hue='Source', ax=ax_top, 
+                  palette=colors, dodge=True, jitter=False, legend=False, marker='o', size=5)
+    sns.stripplot(data=plot_df, x='Vehicle_ID', y='Pmax', hue='Source', ax=ax_bottom, 
+                    palette=colors, dodge=True, jitter=False, legend=False, marker='o', size=5)
+    
+    plot_df = df_Pc[df_Pc['Pt'] > 1e-02]
+    sns.boxplot(data=plot_df, x='Vehicle_ID', y='Pt', hue='Source', ax=ax_top, showfliers=False, legend=False, 
+                palette=colors, flierprops=dict(alpha=0.05), showmeans=True, meanprops=dict(markerfacecolor='white', markeredgecolor='black'), boxprops=dict(alpha=0.6))
     sns.scatterplot(data=df_info, x='Vehicle_ID', y='Max_Power_KW', ax=ax_top, c='red', marker='D', s=50, linewidth=2, legend=False)
     ax_top.set(xlabel=None, ylabel=None)
     ax_top.set_ylim(ylim_top)
@@ -95,8 +110,8 @@ def setup_broken_axis_boxplot(gs_cell, title, df_Pc, df_info, ylim_top, ylim_bot
     ax_top.tick_params(labelbottom=False, bottom=False)
     ax_top.grid(zorder=0)
     
-    sns.boxplot(data=df_Pc[df_Pc['Pt'] > 0], x='Vehicle_ID', y='Pt', hue='Source', ax=ax_bottom, showfliers=True, legend=False, 
-                palette=colors, flierprops=dict(alpha=0.05), showmeans=True, meanprops=dict(markerfacecolor='white', markeredgecolor='black'))
+    sns.boxplot(data=plot_df, x='Vehicle_ID', y='Pt', hue='Source', ax=ax_bottom, showfliers=False, legend=False, 
+                palette=colors, flierprops=dict(alpha=0.05), showmeans=True, meanprops=dict(markerfacecolor='white', markeredgecolor='black'), boxprops=dict(alpha=0.6))
     sns.scatterplot(data=df_info, x='Vehicle_ID', y='Max_Power_KW', ax=ax_bottom, c='red', marker='D', s=50, linewidth=2, legend=False)
     ax_bottom.set(xlabel=None, ylabel=None)
     ax_bottom.set_ylim(ylim_bottom)
@@ -365,18 +380,23 @@ fig.tight_layout()
 ###################################################################################
 from tools_trajectory_evaluation import calculateEnergyConsumption
 
-df_Ec, df = calculateEnergyConsumption(df)
+electric_vehicles = df_info.loc[df_info['Powertrain']=='Electric', 'Vehicle_ID'].unique()
+electric_vehicles_num = [int(v.split('_')[1]) for v in electric_vehicles]
+print(electric_vehicles)
+
+df_Ec, df = calculateEnergyConsumption(df, df_info)
 df_Ec['Source'] = "Before Reconstruction"
-energy_df, df_CvxOpt = calculateEnergyConsumption(df_CvxOpt)
+energy_df, df_CvxOpt = calculateEnergyConsumption(df_CvxOpt, df_info)
 energy_df['Source'] = "Proposed Reconstruction"
 df_Ec = pd.concat((df_Ec, energy_df))
-energy_df, df_Butterworth = calculateEnergyConsumption(df_Butterworth)
+energy_df, df_Butterworth = calculateEnergyConsumption(df_Butterworth, df_info)
 energy_df['Source'] = "Butterworth Reconstruction"
 df_Ec = pd.concat((df_Ec, energy_df))
-energy_df, df_Wavelet = calculateEnergyConsumption(df_Wavelet)
+energy_df, df_Wavelet = calculateEnergyConsumption(df_Wavelet, df_info)
 energy_df['Source'] = "Wavelet-Based Reconstruction"
 df_Ec = pd.concat((df_Ec, energy_df))
 del energy_df
+df_Ec = df_Ec[~df_Ec['Vehicle_ID'].isin(electric_vehicles)]
 df_Ec[["vehicleMeaningless","Vehicle_Num"]] = df_Ec["Vehicle_ID"].str.split("_", n=1, expand=True)
 df_Ec["Vehicle_Num"] = df_Ec["Vehicle_Num"].astype(int)
 df_Ec = df_Ec.sort_values(by=["Vehicle_Num"]).reset_index().drop(columns='index')
@@ -384,29 +404,30 @@ df_Ec = df_Ec.drop(columns=['vehicleMeaningless', 'Vehicle_ID'])
 df_Ec = df_Ec.groupby(by=['Vehicle_Num', 'Source']).mean().unstack().rename_axis(None).rename_axis([None, None], axis=1).droplevel(0, axis=1)
 df_Ec = df_Ec[['Before Reconstruction', 'Proposed Reconstruction', 'Butterworth Reconstruction', 'Wavelet-Based Reconstruction']]
 
-df_Pc = df[['Vehicle_ID', 'Pt']].copy()
+df_Pc = df[['Vehicle_ID', 'Pt', 'Pmax']].copy()
 df_Pc['Source'] = "Before Reconstruction"
-power_df = df_CvxOpt[['Vehicle_ID', 'Pt']].copy()
+power_df = df_CvxOpt[['Vehicle_ID', 'Pt', 'Pmax']].copy()
 power_df['Source'] = "Proposed Reconstruction"
 df_Pc = pd.concat((df_Pc, power_df))
-power_df = df_Butterworth[['Vehicle_ID', 'Pt']].copy()
+power_df = df_Butterworth[['Vehicle_ID', 'Pt', 'Pmax']].copy()
 power_df['Source'] = "Butterworth Reconstruction"
 df_Pc = pd.concat((df_Pc, power_df))
-power_df = df_Wavelet[['Vehicle_ID', 'Pt']].copy()
+power_df = df_Wavelet[['Vehicle_ID', 'Pt', 'Pmax']].copy()
 power_df['Source'] = "Wavelet-Based Reconstruction"
 df_Pc = pd.concat((df_Pc, power_df))
 del power_df
+df_Pc = df_Pc[~df_Pc['Vehicle_ID'].isin(electric_vehicles)]
 
-unique_vehicle_ids = [f"V_{i}" for i in range(1, 15)]
+unique_vehicle_ids = [f"V_{i}" for i in range(1, 15) if i not in electric_vehicles_num]
 fig = plt.figure(figsize=(12, 3), dpi=100)
 gs = gridspec.GridSpec(1, 2, width_ratios=[1, 1])
 ax1 = setup_broken_axis_barplot(
-    gs[0], "", df_Ec, (12, 45), (0, 12), xlabels=unique_vehicle_ids,
+    gs[0], "", df_Ec, (10, 65), (0, 10), xlabels=unique_vehicle_ids,
     colors={"Before Reconstruction": color_before, "Proposed Reconstruction": color_proposed, "Butterworth Reconstruction": color_butter, "Wavelet-Based Reconstruction": color_wavelet}
 )
 ax1.set_ylabel("$E_c$ [kWh/100km]")
 ax2 = setup_broken_axis_boxplot(
-    gs[1], "", df_Pc, df_info, (15, 500), (-1, 15), xlabels=unique_vehicle_ids, 
+    gs[1], "", df_Pc, df_info[~df_info['Vehicle_ID'].isin(electric_vehicles)], (25, 225), (-1, 25), xlabels=unique_vehicle_ids, 
     colors={"Before Reconstruction": color_before, "Proposed Reconstruction": color_proposed, "Butterworth Reconstruction": color_butter, "Wavelet-Based Reconstruction": color_wavelet}
 )
 ax2.set_ylabel("$P_t$ [kW]")
@@ -414,8 +435,32 @@ ax2.set_ylabel("$P_t$ [kW]")
 handles, labels = ax1.get_legend_handles_labels()
 fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(.5, -0.05), ncol=4)
 fig.tight_layout()
-
 plt.show()
 
+"""
+fig, axs = plt.subplots(1, 2, figsize=(12, 3), dpi=100)
+df_Ec.plot.bar(
+    ax=axs[0], edgecolor="black", width=0.75, legend=False, zorder=3,
+    color={"Before Reconstruction": color_before, "Proposed Reconstruction": color_proposed, "Butterworth Reconstruction": color_butter, "Wavelet-Based Reconstruction": color_wavelet}
+)
+axs[0].grid(zorder=0)
+axs[0].set_xticklabels(unique_vehicle_ids, rotation=45, ha='right')
+axs[0].set_ylabel("$E_c$ [kWh/100km]")
+
+plot_df = df_Pc[df_Pc['Pt'] > 1e-02]
+sns.boxplot(data=plot_df, x='Vehicle_ID', y='Pt', hue='Source', ax=axs[1], showfliers=False, legend=False, 
+            palette={"Before Reconstruction": color_before, "Proposed Reconstruction": color_proposed, "Butterworth Reconstruction": color_butter, "Wavelet-Based Reconstruction": color_wavelet}, 
+            flierprops=dict(alpha=0.05), showmeans=True, meanprops=dict(markerfacecolor='white', markeredgecolor='black'))
+plot_df = plot_df[plot_df['Pt'] - plot_df['Pmax'] >= 1e-02]
+sns.stripplot(data=plot_df, x='Vehicle_ID', y='Pmax', hue='Source', ax=axs[1], 
+                palette={"Before Reconstruction": color_before, "Proposed Reconstruction": color_proposed, "Butterworth Reconstruction": color_butter, "Wavelet-Based Reconstruction": color_wavelet},
+                dodge=True, legend=False, marker='o') #s=50, linewidth=2)
+sns.scatterplot(data=df_info[~df_info['Vehicle_ID'].isin(electric_vehicles)], x='Vehicle_ID', y='Max_Power_KW', ax=axs[1], c='red', marker='D', s=50, linewidth=2, legend=False)
+axs[1].set_xticklabels(unique_vehicle_ids, rotation=45, ha='right')
+axs[1].set_ylabel("$P_t$ [kW]")
+axs[1].set_yscale('log')
+fig.tight_layout()
+plt.show()
+"""
 
 sys.exit(1)

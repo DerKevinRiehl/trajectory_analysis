@@ -42,8 +42,8 @@ import _constants as cs
 # #############################################################################
 # CONSTANTS
 # #############################################################################
-COMPARE_RECONSTRUCTION = True
-RUN_RECONSTRUCTION = False
+COMPARE_RECONSTRUCTION = False
+RUN_RECONSTRUCTION = True
 
 DATA_ROOT = "../data_trajectories/6_final_trajectories/"
 RCSN_ROOT = "../data_trajectories/7_final_trajectories_reconstructed/"
@@ -69,23 +69,17 @@ if COMPARE_RECONSTRUCTION:
     df = pd.read_csv(DATA_ROOT + RELEVANT_VIDEO + ".txt", sep=",")
     df = plot_accelerations(df)
     plt.close()
-    #plot_velocities_and_headways(df)
-    #plot_time_space_diagram(df)
-    #plot_oblique_trajectories(df)
-    #plot_oblique_trajectories(df, start_frame=0, end_frame=2500, vehicle_labels_in_plot=True, active_cursor=True)
-    #plt.show()
 
     df_info = pd.read_csv(cs.VEHICLE_INFO_PATH + RELEVANT_VIDEO + ".txt", sep="\t")
-    #print(df_info)
     
-    #df_CvxOpt = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
+    df_CvxOpt = reconstruct_trajectories_cvxopt(df, vehicle_info_df=df_info, end_frame=None, relax_accel_cnst=False, weight_speed_noise=10.0)
     #df_PIButterworth = apply_physics_informed_butterworth_filter(df, vehicle_info_df=df_info)
     df_Butterworth = apply_naive_butterworth_filter(df)
-    #df_Wavelet = reconstruct_trajectories_wavelet(df, soft_thresholding=False)
-    #df_CvxOpt.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_CvxOptNoRelax.txt", index=False)
+    df_Wavelet = reconstruct_trajectories_wavelet(df, soft_thresholding=False)
+    df_CvxOpt.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_CvxOptNoRelax.txt", index=False)
     #df_PIButterworth.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_PIButterworth.txt", index=False)
     df_Butterworth.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_Butterworth.txt", index=False)
-    #df_Wavelet.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_Wavelet.txt", index=False)
+    df_Wavelet.to_csv(RCSN_ROOT + RELEVANT_VIDEO + "_Comparison_Wavelet.txt", index=False)
     
 
     from tools_trajectory_evaluation import calculateInternalConsistency
@@ -101,7 +95,7 @@ if COMPARE_RECONSTRUCTION:
     print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
     print(vals_violation, total_vehicle_frames)
 
-    """
+    
     print("\n\n")
     print("*********************** RECONSTRUCTION: CVXOPT ***********************")
     e_i_max, e_i_min, e_i_avg, e_i_std, distance_travelled = calculateInternalConsistency(df_CvxOpt, cs.FILTERING_SAMPLING_FREQUENCY)
@@ -112,6 +106,7 @@ if COMPARE_RECONSTRUCTION:
     print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
     print(vals_violation, total_vehicle_frames)
 
+    """
     print("\n\n")
     print("*********************** RECONSTRUCTION: PI-Butterworth ***********************")
     e_i_max, e_i_min, e_i_avg, e_i_std, distance_travelled = calculateInternalConsistency(df_PIButterworth, cs.FILTERING_SAMPLING_FREQUENCY)
@@ -121,6 +116,7 @@ if COMPARE_RECONSTRUCTION:
     print(f"Distance Travelled = {distance_travelled}")
     print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
     print(vals_violation, total_vehicle_frames)
+    """
 
     print("\n\n")
     print("*********************** RECONSTRUCTION: Wavelet Transform ***********************")
@@ -131,7 +127,6 @@ if COMPARE_RECONSTRUCTION:
     print(f"Distance Travelled = {distance_travelled}")
     print(f"Platoon Consistency Error: Avg = {e_p_avg}, Std = {e_p_std}, Max = {e_p_max}, Min = {e_p_min}.")
     print(vals_violation, total_vehicle_frames)
-    """
 
     print("\n\n")
     print("*********************** RECONSTRUCTION: Naive Butterworth ***********************")

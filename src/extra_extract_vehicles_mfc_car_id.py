@@ -20,59 +20,64 @@ import matplotlib.pyplot as plt
 
 from scipy import interpolate
 from co2mpas_driver import dsp as driver # This needs a specific conda environment with mfc_env_requirements.txt
+from _constants import VEHICLE_INFO_PATH
 
 ################################################################
 # Constants
 ################################################################
 DB_PATH = "C:/Users/selbaklish/Desktop/Python_Workspace/co2mpas_driver/co2mpas_driver/db/EuroSegmentCar_cleaned.csv"
-
+HP2KW = 0.7457
 
 ################################################################
 # Functions
 ################################################################
+def determine_MFC_CarID(engine_type: str, transmission_type: str, production_year: int, max_power_hp: float, max_torque_nm: float):
+    mfc_df = pd.read_csv(DB_PATH, encoding="ISO-8859-1", index_col=0)
+    car_id = None
+    if engine_type == "ICES":
+        subdf = mfc_df[(mfc_df["General Specifications-Transmission"] == transmission_type.lower()) & (mfc_df["General Specifications-Release date"] <= production_year) & (mfc_df["General Specifications-End date"] >= str(production_year))].copy()
+        subdf["ClosenessMeasure"] = (subdf["Fuel Engine-Max torque"] - max_torque_nm).abs() / subdf["Fuel Engine-Max torque"].mean() + (subdf["Fuel Engine-Max power"] - max_power_hp*HP2KW).abs() / subdf["Fuel Engine-Max power"].mean()
+        car_id = subdf["ClosenessMeasure"].idxmin()
+
+        print(f'ID = {car_id}\n Release Date {subdf.loc[car_id, "General Specifications-Release date"]}, End Date = {subdf.loc[car_id, "General Specifications-End date"]}')
+        print(f' Power = {subdf.loc[car_id, "Fuel Engine-Max power"]} kW, Torque = {subdf.loc[car_id, "Fuel Engine-Max torque"]} Nm')
+        print(f' Performance: Top speed = {subdf.loc[car_id, "Performance-Top speed"]} km/h, 0-100 km/h acceleration = {subdf.loc[car_id, "Performance-Acceleration 0-100 km/h"]} m/s2 \n')
+    elif engine_type == "Electric":
+        subdf = mfc_df[(mfc_df["General Specifications-Release date"] <= production_year)].copy() # & (mfc_df["General Specifications-End date"] >= str(production_year))
+        subdf["ClosenessMeasure"] = (subdf["Electric Engine-Max torque"] - max_torque_nm).abs() / subdf["Electric Engine-Max torque"].mean() + (subdf["Electric Engine-Total max power"] - max_power_hp*HP2KW).abs() / subdf["Electric Engine-Total max power"].mean()
+        car_id = subdf["ClosenessMeasure"].idxmin()
+
+        print(f'ID = {car_id}\n Release Date {subdf.loc[car_id, "General Specifications-Release date"]}, End Date = {subdf.loc[car_id, "General Specifications-End date"]}')
+        print(f' Power = {subdf.loc[car_id, "Electric Engine-Total max power"]} kW, Torque = {subdf.loc[car_id, "Electric Engine-Max torque"]} Nm')
+        print(f' Performance: Top speed = {subdf.loc[car_id, "Performance-Top speed"]} km/h, 0-100 km/h acceleration = {subdf.loc[car_id, "Performance-Acceleration 0-100 km/h"]} m/s2 \n')
+    else:
+        raise NotImplementedError
+
+    return car_id
+
+
 def get_speed_acceleration_curve(car_id, save_interp = False):
     sol = driver(
         dict(
             vehicle_id=car_id, # A sample car id from the database
+            db_path=DB_PATH,
             inputs=dict(
                 inputs=dict(
-                    gear_shifting_style=0.8,
-                    desired_velocity=124/3.6,
-                    starting_velocity=0,
-                    driver_style=0.6,
-                    sim_start=0,
-                    sim_step=0.1,
-                    duration=100,
                     degree=4,
                     use_linear_gs=True,
                     use_cubic=False,
-
                 )
             )
         )
     )["outputs"]
-    discrete_acceleration_curves = sol["discrete_acceleration_curves"]
-    fig = plt.figure()
-    for curve in discrete_acceleration_curves:
-        sp_bins = list(curve["x"])
-        acceleration = list(curve["y"])
-        plt.plot(sp_bins, acceleration)
-    plt.plot(sol["velocities"][1:], sol["accelerations"][1:])
-    plt.xlabel("Speed", fontsize=18)
-    plt.ylabel("Acceleration", fontsize=16)
-    plt.legend(
-        [
-            "acceleration per gear 0",
-            "acceleration per gear 1",
-            "acceleration per gear 2",
-            "acceleration per gear 3",
-            "acceleration per gear 4",
-            "final acceleration",
-        ]
-    )
-    plt.grid()
-
-    speeds = np.linspace(0, 50, 1000)
+    #print(sol.keys())
+    #print(sol['vehicle_mass'], sol['vehicle_max_speed'])
+    #print(type(sol['discrete_car_res_curve_force']), sol['discrete_car_res_curve_force'].shape)
+    #print(type(sol['sp_bins']), sol['sp_bins'].shape)
+    #plt.figure()
+    #plt.plot(sol['sp_bins'], sol['discrete_car_res_curve_force'])
+    
+    speeds = np.linspace(0, sol['vehicle_max_speed'], 1000)
     accelerations = np.zeros_like(speeds)
     decelerations = np.zeros_like(speeds)
     all_decelerations = np.zeros(shape=(len(sol["curves_dec"]), len(speeds)))
@@ -92,6 +97,9 @@ def get_speed_acceleration_curve(car_id, save_interp = False):
     a_p_spl = interpolate.Akima1DInterpolator(speeds, accelerations)
     d_p_spl = interpolate.Akima1DInterpolator(speeds, decelerations)
 
+    #plt.figure()
+    #plt.plot(sol['sp_bins'], (1.03*sol['vehicle_mass']*a_p_spl(sol['sp_bins'])+sol['discrete_car_res_curve_force'])*sol['sp_bins'])
+
     plt.figure()
     plt.plot(speeds, accelerations, label="a_p")
     plt.plot(speeds, a_p_spl(speeds), label="a_p spline", linestyle="--")
@@ -102,20 +110,40 @@ def get_speed_acceleration_curve(car_id, save_interp = False):
     plt.show()
 
     if save_interp:
-        with open(f'ID{car_id}_AccelCapInterp.pkl', 'wb') as f:
+        with open(VEHICLE_INFO_PATH + f'ID{car_id}_AccelCapInterp.pkl', 'wb') as f:
             pickle.dump(a_p_spl, f)
-        with open(f'ID{car_id}_DecelCapInterp.pkl', 'wb') as f:
+        with open(VEHICLE_INFO_PATH + f'ID{car_id}_DecelCapInterp.pkl', 'wb') as f:
             pickle.dump(d_p_spl, f)
 
 
 ################################################################
 # Main
 ################################################################
-df = pd.read_csv(DB_PATH, encoding="ISO-8859-1", index_col=0)
-# print(df.columns)
-
 # NOTE: The vehicles' numbers are according to Table 4 in the Scientific Reports paper.
 # NOTE: The obtained MFC_CarID for all vehicles are yet mapped to the corresponding vehicles information for each video.
+
+# RELEVANT_VIDEO = "DJI_0933.MOV"
+# RELEVANT_VIDEO = "DJI_0934.MOV"
+# RELEVANT_VIDEO = "DJI_0939.MOV"
+# RELEVANT_VIDEO = "DJI_0940.MOV"
+# RELEVANT_VIDEO = "DJI_0943.MOV"
+RELEVANT_VIDEO = "DJI_0944.MOV"
+
+df_info = pd.read_csv(VEHICLE_INFO_PATH + RELEVANT_VIDEO + ".txt", sep="\t")
+print(df_info.head())
+for idx, row in df_info.iterrows():
+    print("*********************************************")
+    print(f"**************** {row['Vehicle_ID']} ******************")
+    car_id = determine_MFC_CarID(engine_type=row['Powertrain'], transmission_type=row['Gearbox'], production_year=row['Year'], 
+                                 max_power_hp=row['Max_Power_HP'], max_torque_nm=row['Max_Torque_Nm'])
+    df_info.loc[idx, 'MFC_CarID'] = car_id
+    get_speed_acceleration_curve(car_id,  save_interp = True)
+    print()
+df_info.to_csv(VEHICLE_INFO_PATH + RELEVANT_VIDEO + ".txt", sep="\t", index=False)
+sys.exit(1)
+
+df = pd.read_csv(DB_PATH, encoding="ISO-8859-1", index_col=0)
+# print(df.columns)
 
 # VEHICLE_1
 vehicle_id = "VEHICLE_1"
