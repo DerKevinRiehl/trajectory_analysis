@@ -134,6 +134,27 @@ def calculatePlatoonConsistency_PhysicalValidHeadway(final_trajectory_df: pd.Dat
     return vals_violation, total_vehicle_frames
 
 
+def calculateEnergyConsumption(trajectory_df: pd.DataFrame) -> pd.DataFrame:
+    f0, f1, f2, m, g, theta = 213, 0.0861, 0.0027, 1500, 9.81, 0
+    Ts = 1.0 / VIDEO_FRAME_RATE
+    res = {'Vehicle_ID': [], 'Ec': []}
+    unique_vehicles = trajectory_df['Vehicle_ID'].unique()
+    mod_trajectory_df = None
+    for vehicle_id in unique_vehicles:
+        vehicle_df = trajectory_df[trajectory_df["Vehicle_ID"]==vehicle_id].copy()
+        if not vehicle_df['Frame_ID'].is_monotonic_increasing:
+            vehicle_df = vehicle_df.sort_values(by='Frame_ID', ascending=True)
+        vehicle_df = vehicle_df.reset_index().drop(columns='index')
+        v, a = vehicle_df['v_Vel'].to_numpy(), vehicle_df['v_Accel'].to_numpy()
+        vehicle_df['Pt'] = 1e-03 * np.maximum(0, (f0 + f1*v + f2*np.power(v, 2) + 1.03*m*a + m*g*np.sin(theta))*v)
+        res['Vehicle_ID'].append(vehicle_id)
+        res['Ec'].append(np.sum(vehicle_df['Pt'].to_numpy()*Ts) / (0.036 * np.sum(v*Ts)))
+        if mod_trajectory_df is None:
+            mod_trajectory_df = vehicle_df.copy()
+        else:
+            mod_trajectory_df = pd.concat((mod_trajectory_df, vehicle_df))
+    return pd.DataFrame(res), mod_trajectory_df
+
 
 """
 print("=====================")

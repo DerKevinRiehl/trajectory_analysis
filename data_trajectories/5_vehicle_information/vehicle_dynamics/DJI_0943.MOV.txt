@@ -1,16 +1,16 @@
-Vehicle_ID	Powertrain	Gearbox	ADAS	Model	MFC_CarID
-VEHICLE_1	ICES	Automatic	Yes	VW Scharan / SEAT Alhambra II BJ 2022	5358
-VEHICLE_2	Electric	Automatic	No	Toyota BZ 4 X 2022	47844
-VEHICLE_3	ICES	Manual	No	Opel	7979
-VEHICLE_4	ICES	Manual	No	Renault	18831
-VEHICLE_5	ICES	Automatic	No	VW Scharan 1.4 TSI BJ 2017	6386
-VEHICLE_6	ICES	Automatic	No	Renault Laguna III BJ 2014	27189
-VEHICLE_7	ICES	Automatic	No	Toyota Verso 2.2 D-4D BJ 2015	6446
-VEHICLE_8	ICES	Manual	No	Citroen Picasso C3 1.6 VTi 120 EGS6 2015	8709
-VEHICLE_9	ICES	Manual	No	Ford Focus NA3, Bj 2018	7897
-VEHICLE_10	ICES	Automatic	Yes	VW Caddy Maxi, 1.4 TSI Jg. 2019	23801
-VEHICLE_11	ICES	Automatic	Yes	Polestar 1, Rennversion von volvo mit 2lt Benzinmotor 2021	4957
-VEHICLE_12	ICES	Manual	No	VW Caddy 2K 2012 1.2 TSI	7979
-VEHICLE_13	ICES	Manual	No	Peugeot RCZ R 2015	18831
-VEHICLE_14	Electric	Automatic	Yes	VW Golf, Thomas Huber, Gold VII Typ AU 2014	47844
-VEHICLE_15	ICES	Automatic	Yes	Audi A4 2.0 TDI DSG 2016 TCS	39396
+Vehicle_ID	Powertrain	Gearbox	ADAS	Model	MFC_CarID	Max_Power_HP	Max_Power_KW	Max_Torque_Nm
+VEHICLE_1	ICES	Automatic	Yes	VW Scharan / SEAT Alhambra II BJ 2022	5358	150	111.855	340
+VEHICLE_2	Electric	Automatic	No	Toyota BZ 4 X 2022	47844	218	162.5626	266
+VEHICLE_3	ICES	Manual	No	Opel	7979	87	64.8759	130
+VEHICLE_4	ICES	Manual	No	Renault	18831	150	111.855	340
+VEHICLE_5	ICES	Automatic	No	VW Scharan 1.4 TSI BJ 2017	6386	150	111.855	250
+VEHICLE_6	ICES	Automatic	No	Renault Laguna III BJ 2014	27189	150	111.855	340
+VEHICLE_7	ICES	Automatic	No	Toyota Verso 2.2 D-4D BJ 2015	6446	177	131.9889	400
+VEHICLE_8	ICES	Manual	No	Citroen Picasso C3 1.6 VTi 120 EGS6 2015	8709	120	89.484	160
+VEHICLE_9	ICES	Manual	No	Ford Focus NA3, Bj 2018	7897	150	111.855	240
+VEHICLE_10	ICES	Automatic	Yes	VW Caddy Maxi, 1.4 TSI Jg. 2019	23801	125	93.2125	200
+VEHICLE_11	ICES	Automatic	Yes	Polestar 1, Rennversion von volvo mit 2lt Benzinmotor 2021	4957	600	447.42	1000
+VEHICLE_12	ICES	Manual	No	VW Caddy 2K 2012 1.2 TSI	7979	86	64.1302	160
+VEHICLE_13	ICES	Manual	No	Peugeot RCZ R 2015	18831	270	201.339	330
+VEHICLE_14	Electric	Automatic	Yes	VW Golf, Thomas Huber, Gold VII Typ AU 2014	47844	115	85.7555	270
+VEHICLE_15	ICES	Automatic	Yes	Audi A4 2.0 TDI DSG 2016 TCS	39396	190	141.683	400

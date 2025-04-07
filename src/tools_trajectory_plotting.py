@@ -22,6 +22,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from typing import Optional
+from matplotlib.axes import Axes
 
 from _constants import default_plotting_settings
 
@@ -30,7 +31,7 @@ from _constants import default_plotting_settings
 # METHODS
 # #############################################################################
 def plot_time_space_diagram(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None,
-                            vehicle_labels_in_plot: Optional[bool] = False):
+                            vehicle_labels_in_plot: Optional[bool] = False, axis: Optional[Axes] = None):
     """
     This methods plots the time space diagram showing the x-lane coordinates of all vehicles across time.
 
@@ -44,6 +45,8 @@ def plot_time_space_diagram(trajectory_df: pd.DataFrame, start_frame: Optional[i
         The ending frame to end plotting at.
     vehicle_labels_in_plot: Optional[bool] = False
         Flag to add text annptations with vehicle IDs next to the trajectory end inside the plot.
+    axis: Optional[Axes] = None
+        Matplotlib Axes object upon which to draw oblique trajectories
 
     Returns
     -------
@@ -58,12 +61,14 @@ def plot_time_space_diagram(trajectory_df: pd.DataFrame, start_frame: Optional[i
     plot_df = plot_df.sort_values(by=["Frame_ID", "vehicleIndexNumber"])
 
     palette = sns.color_palette(default_plotting_settings["color_palette"])
-    plt.figure(figsize=default_plotting_settings["figure_size"])
-    ax = sns.lineplot(plot_df, x="Global_Time", y="Lane_X", hue="vehicleIndexNumber", 
-                 palette=palette, linewidth=default_plotting_settings["line_width"])
-    plt.grid(alpha=default_plotting_settings["grid_alpha"], linestyle=default_plotting_settings["grid_line_style"])
+    if axis is None:
+        plt.figure(figsize=default_plotting_settings["figure_size"])
+        axis = plt.gca()
+    sns.lineplot(plot_df, x="Global_Time", y="Lane_X", hue="vehicleIndexNumber", 
+                 palette=palette, linewidth=default_plotting_settings["line_width"], ax=axis)
+    axis.grid(alpha=default_plotting_settings["grid_alpha"], linestyle=default_plotting_settings["grid_line_style"])
     sns.move_legend(
-        ax, "lower center",
+        axis, "lower center",
         bbox_to_anchor=(.5, 1), ncol=7, title="Vehicle ID", frameon=True,
     )
 
@@ -72,13 +77,15 @@ def plot_time_space_diagram(trajectory_df: pd.DataFrame, start_frame: Optional[i
         for vehicle_idx in unique_vehicles:
             vehicle_df = plot_df[plot_df["vehicleIndexNumber"] == vehicle_idx]
             idx = vehicle_df["Frame_ID"].idxmax()
-            plt.text(x=vehicle_df.loc[idx, "Global_Time"].item()+0.2, y=vehicle_df.loc[idx, "Lane_X"].item(), s=f"V_{vehicle_idx}", 
+            axis.text(x=vehicle_df.loc[idx, "Global_Time"].item()+0.2, y=vehicle_df.loc[idx, "Lane_X"].item(), s=f"V_{vehicle_idx}", 
                     color=palette[vehicle_idx-1], fontsize=10, weight="bold")
-    plt.xlim([-1, plot_df["Global_Time"].max()+5])
+    axis.set_xlim([plot_df["Global_Time"].min()-1, plot_df["Global_Time"].max()+5])
+    return axis
 
 
 def plot_oblique_trajectories(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None,
-                              vehicle_labels_in_plot: Optional[bool] = False, active_cursor: Optional[bool] = False) -> None:
+                              vehicle_labels_in_plot: Optional[bool] = False, active_cursor: Optional[bool] = False, 
+                              axis: Optional[Axes] = None) -> None:
     """
     This methods plots the time space diagram showing the oblique x-lane coordinates of all vehicles across time.
     Oblique x-lane coordinates are extracted using a transformation in order to rotate the trajectories to be horizontal in the plot.
@@ -96,6 +103,8 @@ def plot_oblique_trajectories(trajectory_df: pd.DataFrame, start_frame: Optional
         Flag to add text annptations with vehicle IDs next to the trajectory end inside the plot.
     active_cursor: Optional[bool] = False
         Flag to activate mplcursors to show trajectory data when hovering.
+    axis: Optional[Axes] = None
+        Matplotlib Axes object upon which to draw oblique trajectories
     
     Returns
     -------
@@ -116,7 +125,7 @@ def plot_oblique_trajectories(trajectory_df: pd.DataFrame, start_frame: Optional
     plot_df["vehicleIndexNumber"] = plot_df["vehicleIndexNumber"].astype(int)
     plot_df = plot_df.sort_values(by=["Frame_ID", "vehicleIndexNumber"])
 
-    vehicle_id = np.random.choice(plot_df["Vehicle_ID"].unique(), size=1)[0]
+    vehicle_id = "VEHICLE_1" #np.random.choice(plot_df["Vehicle_ID"].unique(), size=1)[0]
     vehicle_df = plot_df[plot_df["Vehicle_ID"] == vehicle_id].copy()
     vehicle_start_pos = vehicle_df.loc[vehicle_df["Frame_ID"] == start_frame, "Lane_X"].item()
     vehicle_end_pos = vehicle_df.loc[vehicle_df["Frame_ID"] == end_frame, "Lane_X"].item()
@@ -126,10 +135,12 @@ def plot_oblique_trajectories(trajectory_df: pd.DataFrame, start_frame: Optional
     plot_df["Oblique_Lane_X"] = plot_df["Global_Time"] * np.sin(rot_angle) + plot_df["Lane_X"] * np.cos(rot_angle)
 
     palette = sns.color_palette(default_plotting_settings["color_palette"])
-    plt.figure(figsize=default_plotting_settings["figure_size"])
-    ax = sns.lineplot(plot_df, x="Global_Time", y="Oblique_Lane_X", hue="vehicleIndexNumber", 
+    if axis is None:
+        plt.figure(figsize=default_plotting_settings["figure_size"])
+        axis = plt.gca()
+    sns.lineplot(plot_df, x="Global_Time", y="Oblique_Lane_X", hue="vehicleIndexNumber", ax=axis, 
                  palette=palette, linewidth=default_plotting_settings["ObliqueTrajectories"]["line_width"])
-    h, l = ax.get_legend_handles_labels()
+    h, l = axis.get_legend_handles_labels()
 
     if active_cursor:
         tsd = sns.scatterplot(data=plot_df, x="Global_Time", y="Oblique_Lane_X", hue="vehicleIndexNumber", 
@@ -147,7 +158,7 @@ def plot_oblique_trajectories(trajectory_df: pd.DataFrame, start_frame: Optional
         d = vehicle_df.loc[vehicle_df["Global_Time"] == t, "Lane_X"].item()
         oblique_d_min_t = min_t * np.sin(rot_angle) + d * np.cos(rot_angle)
         t_min_x = (min_x - d * np.cos(rot_angle)) / np.sin(rot_angle)
-        plt.plot([min_t, t_min_x], [oblique_d_min_t, min_x], 
+        axis.plot([min_t, t_min_x], [oblique_d_min_t, min_x], 
                  linewidth=default_plotting_settings["ObliqueTrajectories"]["oblique_grid_line_width"], 
                  linestyle=default_plotting_settings["ObliqueTrajectories"]["oblique_grid_line_style"], 
                  color=default_plotting_settings["ObliqueTrajectories"]["oblique_grid_line_color"],
@@ -155,22 +166,25 @@ def plot_oblique_trajectories(trajectory_df: pd.DataFrame, start_frame: Optional
         t_text = (max_x-10 - d * np.cos(rot_angle)) / np.sin(rot_angle)
         if t_text < min_t:
             continue
-        plt.text(x=t_text-2.0, y=max_x-10, s=f"{d:.1f} m",
+        axis.text(x=t_text-6.0, y=max_x-10, s=f"{d:.1f} m",
                  color=default_plotting_settings["ObliqueTrajectories"]["oblique_grid_line_color"],
-                 fontsize=6, bbox=dict(facecolor='white', edgecolor="white"))
+                 fontsize=7, bbox=dict(facecolor='white', edgecolor="white", alpha=0.5))
 
-    plt.grid(alpha=default_plotting_settings["grid_alpha"], linestyle=default_plotting_settings["grid_line_style"])
-    ax.legend(h, l, bbox_to_anchor=(.5, 1), loc="lower center", ncol=7, title="Vehicle ID", frameon=True)
+    axis.grid(alpha=default_plotting_settings["grid_alpha"], linestyle=default_plotting_settings["grid_line_style"])
+    axis.legend(h, l, bbox_to_anchor=(.5, 1), loc="lower center", ncol=7, title="Vehicle ID", frameon=True)
 
     if vehicle_labels_in_plot:
         unique_vehicles = plot_df["vehicleIndexNumber"].unique()
         for vehicle_idx in unique_vehicles:
             vehicle_df = plot_df[plot_df["vehicleIndexNumber"] == vehicle_idx]
             idx = vehicle_df["Frame_ID"].idxmax()
-            plt.text(x=vehicle_df.loc[idx, "Global_Time"].item()+0.2, y=vehicle_df.loc[idx, "Oblique_Lane_X"].item(), s=f"V_{vehicle_idx}", 
-                    color=palette[vehicle_idx-1], fontsize=10, weight="bold")
-    plt.xlim([min_t, max_t])
-    plt.ylim([min_x, max_x])
+            axis.text(x=vehicle_df.loc[idx, "Global_Time"].item()+0.2, y=vehicle_df.loc[idx, "Oblique_Lane_X"].item(), s=f"V_{vehicle_idx}", 
+                    color=palette[vehicle_idx-1], fontsize=7, weight="bold")
+        axis.set_xlim([min_t, max_t+30])
+    else:
+        axis.set_xlim([min_t, max_t])
+    axis.set_ylim([min_x, max_x])
+    return axis
 
 
 def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None) -> None:
@@ -225,8 +239,10 @@ def plot_velocities_and_headways(trajectory_df: pd.DataFrame, start_frame: Optio
     return trajectory_df
 
 
-def plot_accelerations(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None) -> pd.DataFrame:
-    if not "v_Accel" in trajectory_df.columns:
+def plot_accelerations(trajectory_df: pd.DataFrame, start_frame: Optional[int] = 0, end_frame: Optional[int] = None, recompute_speeds: Optional[bool] = False) -> pd.DataFrame:
+    if not "v_Accel" in trajectory_df.columns or recompute_speeds:
+        if recompute_speeds:
+            trajectory_df = trajectory_df.drop(columns=['v_Vel'])
         unique_vehicles = trajectory_df["Vehicle_ID"].unique()
         accel_df = None
         for vehicle_id in unique_vehicles:
@@ -234,8 +250,13 @@ def plot_accelerations(trajectory_df: pd.DataFrame, start_frame: Optional[int] =
             if not vehicle_df["Frame_ID"].is_monotonic_increasing:
                 vehicle_df = vehicle_df.sort_values(by=["Frame_ID"])
             sampling_interval = vehicle_df["Global_Time"].diff(1).mean()
+            if recompute_speeds:
+                vehicle_df["v_Vel"] = vehicle_df["Lane_X"].diff(1).shift(-1).fillna(0) / sampling_interval
             vehicle_df["v_Accel"] = vehicle_df["v_Vel"].diff(1).shift(-1).fillna(0) / sampling_interval
-            vehicle_df = vehicle_df[["Frame_ID", "Vehicle_ID", "v_Accel"]]
+            if recompute_speeds:
+                vehicle_df = vehicle_df[["Frame_ID", "Vehicle_ID", "v_Accel", "v_Vel"]]
+            else:
+                vehicle_df = vehicle_df[["Frame_ID", "Vehicle_ID", "v_Accel"]]
             if accel_df is None:
                 accel_df = vehicle_df.copy()
             else:
