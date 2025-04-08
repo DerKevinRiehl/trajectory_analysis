@@ -72,8 +72,8 @@ axs[1].set_title("(b) DJI_0944", fontweight="bold")
 #fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(.5, -0.05), ncol=15, fontsize="small")
 fig.tight_layout()
 #fig.savefig(f"./fig_i_TSDsnippet.pdf", bbox_inches='tight', dpi=100)
-plt.show()
-sys.exit(1)
+#plt.show()
+#sys.exit(1)
 
 ###################################################################################
 # Main: Figure 11
