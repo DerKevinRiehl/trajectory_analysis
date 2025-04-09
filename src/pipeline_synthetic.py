@@ -1,5 +1,15 @@
+"""
+Consistent Vehicle Trajectory Extraction From Aerial Recordings Using Oriented Object Detection
+-------------------------------------------
+Authors:        Kevin Riehl, Shaimaa El-Baklish
+Organization:   ETH Zürich, Switzerland, IVT - Institute for Transportation Planning and Systems
+Development:    2024 - 2025
+Submitted to:   Scientific Reports
+-------------------------------------------
+"""
+
 # #############################################################################
-# ########## IMPORTS
+# IMPORTS
 # #############################################################################
 import warnings
 warnings.filterwarnings('ignore')
@@ -17,7 +27,7 @@ from tools_trajectory_filtering import reconstruct_trajectories_cvxopt
 
 
 # #############################################################################
-# ########## METHODS
+# METHODS
 # #############################################################################
 
 def generateSyntheticTrajectory(noise_pos, noise_angle, coverage):
@@ -65,7 +75,7 @@ def generateSyntheticTrajectory(noise_pos, noise_angle, coverage):
 
 
 # #############################################################################
-# ########## MAIN - PROCESSING PER FRAME
+# MAIN - PROCESSING PER FRAME
 # #############################################################################
 
 # Determine Kalman Filter Parameters

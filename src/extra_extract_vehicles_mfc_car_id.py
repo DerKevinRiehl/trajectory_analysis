@@ -1,10 +1,10 @@
 """
-TITLE OF PAPAER
+Consistent Vehicle Trajectory Extraction From Aerial Recordings Using Oriented Object Detection
 -------------------------------------------
-Authors:        Shaimaa El-Baklish, Kevin Riehl
+Authors:        Kevin Riehl, Shaimaa El-Baklish
 Organization:   ETH Zürich, Switzerland, IVT - Institute for Transportation Planning and Systems
-Development:    2024
-Submitted to:   JOURNAL
+Development:    2024 - 2025
+Submitted to:   Scientific Reports
 -------------------------------------------
 """
 ################################################################

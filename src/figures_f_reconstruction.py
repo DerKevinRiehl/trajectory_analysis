@@ -1,3 +1,13 @@
+"""
+Consistent Vehicle Trajectory Extraction From Aerial Recordings Using Oriented Object Detection
+-------------------------------------------
+Authors:        Kevin Riehl, Shaimaa El-Baklish
+Organization:   ETH Zürich, Switzerland, IVT - Institute for Transportation Planning and Systems
+Development:    2024 - 2025
+Submitted to:   Scientific Reports
+-------------------------------------------
+"""
+
 # Imports
 import numpy as np
 import pandas as pd
